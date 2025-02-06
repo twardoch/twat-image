@@ -1,6 +1,8 @@
-# 
+# twat-image
 
+(work in progress)
 
+Non-AI image modification. 
 
 ## Features
 
