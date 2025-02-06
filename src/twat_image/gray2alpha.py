@@ -13,7 +13,7 @@ a colored image with an alpha mask. Output is written to a file (or stdout).
 import re
 import sys
 from pathlib import Path
-from typing import Tuple, Union
+from typing import Union
 
 import fire
 import numpy as np
@@ -21,10 +21,10 @@ import webcolors
 from PIL import Image, ImageOps
 
 # Type alias for color specifications.
-ColorSpec = Union[str, Tuple[int, int, int]]
+ColorSpec = Union[str, tuple[int, int, int]]
 
 
-def parse_color(color_spec: ColorSpec) -> Tuple[int, int, int]:
+def parse_color(color_spec: ColorSpec) -> tuple[int, int, int]:
     """Parse a color specification into an (R, G, B) tuple.
 
     Supports:
@@ -56,11 +56,11 @@ def parse_color(color_spec: ColorSpec) -> Tuple[int, int, int]:
             try:
                 return webcolors.name_to_rgb(s)
             except ValueError:
-                raise ValueError(f"Invalid color specification: {color_spec!r}")
+                msg = f"Invalid color specification: {color_spec!r}"
+                raise ValueError(msg)
         case _:
-            raise ValueError(
-                f"Color must be a string or an RGB tuple, got: {color_spec!r}"
-            )
+            msg = f"Color must be a string or an RGB tuple, got: {color_spec!r}"
+            raise ValueError(msg)
 
 
 def normalize_grayscale(
@@ -68,7 +68,7 @@ def normalize_grayscale(
 ) -> Image.Image:
     """Normalize contrast of a grayscale image using thresholds.
 
-    The white and black points may be given as fractions (0–1) or percentages (>1).
+    The white and black points may be given as fractions (0-1) or percentages (>1).
 
     Args:
       img: Input grayscale image.
@@ -83,9 +83,10 @@ def normalize_grayscale(
     black_point = black_point / 100 if black_point > 1 else black_point
 
     if not (0 <= black_point < white_point <= 1):
-        raise ValueError(
+        msg = (
             f"Invalid thresholds: black_point={black_point}, white_point={white_point}"
         )
+        raise ValueError(msg)
 
     # Auto-adjust contrast.
     img = ImageOps.autocontrast(img)
@@ -132,7 +133,7 @@ def create_alpha_image(
     return base
 
 
-def open_image(source: Union[str, Path]) -> Image.Image:
+def open_image(source: str | Path) -> Image.Image:
     """Open an image from a file path or from standard input.
 
     Args:
@@ -146,7 +147,7 @@ def open_image(source: Union[str, Path]) -> Image.Image:
     return Image.open(Path(source))
 
 
-def save_image(img: Image.Image, destination: Union[str, Path]) -> None:
+def save_image(img: Image.Image, destination: str | Path) -> None:
     """Save an image to a file path or to standard output.
 
     Args:
@@ -187,8 +188,8 @@ def igray2alpha(
 
 
 def gray2alpha(
-    input_path: Union[str, Path] = "-",
-    output_path: Union[str, Path] = "-",
+    input_path: str | Path = "-",
+    output_path: str | Path = "-",
     color: ColorSpec = "black",
     white_point: float = 0.9,
     black_point: float = 0.1,
@@ -213,7 +214,8 @@ def gray2alpha(
             result = igray2alpha(img, color, white_point, black_point, negative)
         save_image(result, output_path)
     except Exception as e:
-        raise OSError(f"Error processing image: {e}") from e
+        msg = f"Error processing image: {e}"
+        raise OSError(msg) from e
 
 
 def cli() -> None:
