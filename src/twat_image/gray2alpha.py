@@ -9,6 +9,7 @@ This script reads an image (from a file or from stdin), converts it
 to grayscale, normalizes its contrast using thresholds, then creates
 a colored image with an alpha mask. Output is written to a file (or stdout).
 """
+
 from __future__ import annotations
 
 import re
