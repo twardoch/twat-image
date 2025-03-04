@@ -2,25 +2,26 @@
 description: File tree of the project
 globs: 
 ---
-[ 736]  .
+[ 768]  .
 ├── [  64]  .benchmarks
 ├── [  96]  .cursor
 │   └── [ 224]  rules
 │       ├── [ 821]  0project.mdc
 │       ├── [ 516]  cleanup.mdc
-│       ├── [2.5K]  filetree.mdc
+│       ├── [ 966]  filetree.mdc
 │       └── [2.0K]  quality.mdc
 ├── [  96]  .github
 │   └── [ 128]  workflows
 │       ├── [2.7K]  push.yml
 │       └── [1.4K]  release.yml
 ├── [3.5K]  .gitignore
-├── [ 532]  .pre-commit-config.yaml
+├── [ 470]  .pre-commit-config.yaml
+├── [ 987]  CLEANUP.txt
 ├── [1.0K]  LICENSE
 ├── [1.7K]  LOG.md
 ├── [ 812]  README.md
 ├── [   7]  VERSION.txt
-├── [ 11K]  cleanup.py
+├── [ 13K]  cleanup.py
 ├── [ 160]  dist
 ├── [7.6K]  pyproject.toml
 ├── [ 128]  src
@@ -30,4 +31,4 @@ globs:
 └── [ 128]  tests
     └── [ 154]  test_twat_image.py
 
-10 directories, 17 files
+10 directories, 18 files
