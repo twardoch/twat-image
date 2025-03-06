@@ -123,7 +123,7 @@ globs:
 │   └── [ 224]  rules
 │       ├── [ 821]  0project.mdc
 │       ├── [ 516]  cleanup.mdc
-│       ├── [ 966]  filetree.mdc
+│       ├── [ 996]  filetree.mdc
 │       └── [2.0K]  quality.mdc
 ├── [  96]  .github
 │   └── [ 128]  workflows
@@ -135,6 +135,7 @@ globs:
 ├── [1.0K]  LICENSE
 ├── [1.7K]  LOG.md
 ├── [ 812]  README.md
+├── [ 35K]  REPO_CONTENT.txt
 ├── [   7]  VERSION.txt
 ├── [ 13K]  cleanup.py
 ├── [ 160]  dist
@@ -146,7 +147,7 @@ globs:
 └── [ 128]  tests
     └── [ 154]  test_twat_image.py
 
-10 directories, 18 files
+10 directories, 19 files
 
 ================
 File: .cursor/rules/quality.mdc
@@ -1288,7 +1289,7 @@ MIT License
 ================
 File: VERSION.txt
 ================
-v2.5.3
+v2.6.2
 
 
 
