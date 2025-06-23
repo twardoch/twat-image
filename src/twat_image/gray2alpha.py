@@ -1,7 +1,3 @@
-#!/usr/bin/env -S uv run
-# /// script
-# dependencies = ["fire", "numpy", "pillow", "webcolors"]
-# ///
 """
 Convert grayscale images to colored images with alpha masks.
 
@@ -70,15 +66,36 @@ def normalize_grayscale(
 ) -> Image.Image:
     """Normalize contrast of a grayscale image using thresholds.
 
-    The white and black points may be given as fractions (0-1) or percentages (>1).
+    The function first applies `ImageOps.autocontrast` to the image.
+    Then, it uses the `white_point` and `black_point` to further adjust
+    the contrast and map pixel values.
+
+    Thresholds can be specified as fractions (0.0 to 1.0) or as
+    percentages (e.g., 90 for 90th percentile, which means values > 1).
 
     Args:
-      img: Input grayscale image.
-      white_point: Above this threshold the pixel becomes white.
-      black_point: Below this threshold the pixel becomes black.
+      img: Input PIL grayscale ('L' mode) image.
+      white_point: The threshold (0.0-1.0) above which pixels in the
+        autocontrasted image are mapped to pure white (255).
+        If `white_point` > 1, it's treated as a percentage (e.g., 10 for 10%).
+        The conversion for percentage `wp_perc` is `1.0 - (wp_perc / 100.0)`.
+        Example: `white_point=10` (10%) means threshold `0.9`.
+        This might seem counter-intuitive: `white_point=10` (percent) means
+        the brightest 10% of the range (after autocontrast) will be mapped to white.
+        Default is `0.9`.
+      black_point: The threshold (0.0-1.0) below which pixels in the
+        autocontrasted image are mapped to pure black (0).
+        If `black_point` > 1, it's treated as a percentage (e.g., 10 for 10%).
+        The conversion for percentage `bp_perc` is `bp_perc / 100.0`.
+        Example: `black_point=10` (10%) means threshold `0.1`.
+        This means the darkest 10% of the range (after autocontrast) will be mapped to black.
+        Default is `0.1`.
 
     Returns:
-      A contrast-normalized grayscale image.
+      A new PIL grayscale image with normalized contrast.
+
+    Raises:
+      ValueError: If threshold values are invalid (e.g., black_point >= white_point).
     """
     # Convert percentages to decimals if needed.
     white_point = (1 - white_point / 100) if white_point > 1 else white_point
@@ -118,14 +135,26 @@ def create_alpha_image(
 ) -> Image.Image:
     """Create a colored RGBA image using the given grayscale mask as alpha.
 
+    The RGB channels of the output image are filled with the specified `color`.
+    The alpha channel is derived from the `mask`.
+
     Args:
-      mask: A grayscale image to serve as the alpha mask.
-      color: The fill color (as a name, hex string, or RGB tuple).
-      negative: If False (the default), the mask is inverted.
+      mask: A PIL grayscale ('L' mode) image to serve as the alpha mask.
+      color: The fill color for the RGB channels. Can be a color name
+        (e.g., "red"), a hex string (e.g., "#FF0000"), or an RGB tuple
+        (e.g., (255, 0, 0)). Parsed by `parse_color`.
+      negative: Controls how the `mask` is interpreted for the alpha channel.
+        - If `False` (default): The mask is inverted (`ImageOps.invert(mask)`).
+          Darker areas in the original mask become more transparent (lower alpha).
+          For example, mask value 0 (black) -> inverted to 255 -> alpha 255 (opaque).
+          Mask value 255 (white) -> inverted to 0 -> alpha 0 (transparent).
+        - If `True`: The mask is used directly. Darker areas in the original
+          mask result in lower alpha values (more transparent).
+          For example, mask value 0 (black) -> alpha 0 (transparent).
+          Mask value 255 (white) -> alpha 255 (opaque).
 
     Returns:
-      An RGBA image where the RGB channels are filled with the chosen color
-      and the alpha channel is derived from the (possibly inverted) mask.
+      A new PIL RGBA image.
     """
     rgb_color = parse_color(color)
     base = Image.new("RGBA", mask.size, rgb_color)
@@ -174,15 +203,33 @@ def igray2alpha(
 ) -> Image.Image:
     """Convert an image by normalizing its grayscale version and applying an alpha mask.
 
+    This is the core image processing function. It performs the following steps:
+    1. Converts the input `img` to grayscale ('L' mode).
+    2. Normalizes the contrast of the grayscale image using `normalize_grayscale`
+       with the provided `white_point` and `black_point`.
+    3. Creates a new RGBA image using the normalized grayscale image as a mask.
+       The RGB channels are filled with the specified `color`, and the alpha
+       channel is determined by the mask and the `negative` flag, as handled
+       by `create_alpha_image`.
+
     Args:
-      img: The input PIL Image.
-      color: The fill color for the output image.
-      white_point: Threshold above which pixels become white.
-      black_point: Threshold below which pixels become black.
-      negative: Whether to leave the mask non-inverted.
+      img: The input PIL Image (can be any mode that Pillow can convert to 'L').
+      color: The fill color for the output image's RGB channels.
+        Passed to `create_alpha_image`. See `parse_color` for format.
+        Default is "black".
+      white_point: White point threshold for `normalize_grayscale`.
+        Can be a fraction (0.0-1.0) or percentage (>1). Default is `0.9`.
+        See `normalize_grayscale` docstring for details on percentage interpretation.
+      black_point: Black point threshold for `normalize_grayscale`.
+        Can be a fraction (0.0-1.0) or percentage (>1). Default is `0.1`.
+        See `normalize_grayscale` docstring for details on percentage interpretation.
+      negative: Controls how the normalized mask is interpreted for alpha.
+        Passed to `create_alpha_image`. Default is `False`.
+        See `create_alpha_image` docstring for details.
 
     Returns:
-      An RGBA image with the specified color and alpha mask.
+      A new PIL RGBA image with the specified color and an alpha mask derived
+      from the normalized grayscale version of the input image.
     """
     gray = img.convert("L")
     normalized = normalize_grayscale(gray, white_point, black_point)
@@ -197,27 +244,31 @@ def gray2alpha(
     black_point: float = 0.1,
     negative: bool = False,
 ) -> None:
-    """Read an image, process it, and write the output.
+    """CLI function to read an image, process it using igray2alpha, and save.
 
-    Reads the image from the given input path (or from stdin if "-"),
-    converts it to grayscale, normalizes contrast, applies a colored
-    alpha mask, and writes the result to the output path (or stdout if "-").
+    This function is intended to be used as the target for the `fire` CLI.
+    It orchestrates image loading, processing via `igray2alpha`, and saving.
+    Output is always in PNG format.
 
     Args:
-      input_path: Input file path or "-" for stdin.
-      output_path: Output file path or "-" for stdout.
-      color: Color specification for the output image.
-      white_point: White threshold (0–1 or 1–100).
-      black_point: Black threshold (0–1 or 1–100).
-      negative: If True, do not negative the mask.
+      input_path: Path to the input image file. If "-", reads from stdin.
+      output_path: Path to save the output PNG image. If "-", writes to stdout.
+      color: Fill color for the output image. See `parse_color` for format.
+        Default: "black".
+      white_point: White point threshold for normalization (0.0-1.0 or >1 for percentage).
+        Default: 0.9. See `normalize_grayscale` for detailed explanation,
+        especially regarding percentage interpretation.
+      black_point: Black point threshold for normalization (0.0-1.0 or >1 for percentage).
+        Default: 0.1. See `normalize_grayscale` for detailed explanation.
+      negative: If True, the alpha mask is not inverted (lighter areas of the
+        original grayscale image become more opaque in the final alpha).
+        If False (default), the mask is inverted (darker areas of the original
+        grayscale image become more opaque). See `create_alpha_image`.
     """
-    try:
-        with open_image(input_path) as img:
-            result = igray2alpha(img, color, white_point, black_point, negative)
-        save_image(result, output_path)
-    except Exception as e:
-        msg = f"Error processing image: {e}"
-        raise OSError(msg) from e
+    # Exceptions will be caught and reported by `fire` at the CLI level.
+    with open_image(input_path) as img:
+        result = igray2alpha(img, color, white_point, black_point, negative)
+    save_image(result, output_path)
 
 
 def cli() -> None:

@@ -3,6 +3,6 @@
 
 def test_version():
     """Verify package exposes version."""
-    import twat_image
+    import image_alpha_utils
 
-    assert twat_image.__version__
+    assert image_alpha_utils.__version__

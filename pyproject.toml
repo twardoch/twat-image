@@ -1,5 +1,5 @@
 # this_file: pyproject.toml
-# this_project: twat_image
+# this_project: image_alpha_utils
 # Build System Configuration
 # -------------------------
 # Specifies the build system and its requirements for packaging the project
@@ -15,19 +15,19 @@ build-backend = "hatchling.build" # Use Hatchling as the build backend
 # Wheel build configuration
 # Specifies which packages to include in the wheel distribution
 [tool.hatch.build.targets.wheel]
-packages = ["src/twat_image"]
+packages = ["src/image_alpha_utils"]
 
 # Project Metadata Configuration
 # ------------------------------
 # Comprehensive project description, requirements, and compatibility information
 [project]
-name = "twat-image"
+name = "image-alpha-utils"
 dynamic = ["version"] # Version is determined dynamically from VCS
-description = ""
+description = "A Python utility for converting images to include alpha channels based on grayscale values, and other image manipulations."
 readme = "README.md"
 requires-python = ">=3.10" # Minimum Python version required
 license = "MIT"
-keywords = []
+keywords = ["image", "alpha", "graphics", "utility", "conversion"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Programming Language :: Python",
@@ -36,14 +36,20 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
+    "Intended Audience :: Developers",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
 ]
 # Runtime Dependencies
 # -------------------
 # External packages required for the project to function
 dependencies = [
-    "twat>=1.8.1", # Main twat package
-    "pydantic>=2.10.6", # Data validation using Python type annotations
-
+    "image_utils_plugin_host>=1.8.1", # Main plugin host package
+    "fire",
+    "numpy",
+    "pillow",
+    "webcolors",
 ]
 
 # Project Authors
@@ -56,15 +62,20 @@ email = "adam+github@twardoch.com"
 # ------------
 # Links to project resources for documentation, issues, and source code
 [project.urls]
-Documentation = "https://github.com/twardoch/twat-image#readme"
-Issues = "https://github.com/twardoch/twat-image/issues"
-Source = "https://github.com/twardoch/twat-image"
+Documentation = "https://github.com/twardoch/image-alpha-utils#readme"
+Issues = "https://github.com/twardoch/image-alpha-utils/issues"
+Source = "https://github.com/twardoch/image-alpha-utils"
 
-# Twat Plugin Registration
+# Plugin Registration (Example - adjust if needed)
 # -----------------------
-# Registers this package as a plugin for the twat ecosystem
-[project.entry-points."twat.plugins"]
-image = "twat_image"
+# Registers this package as a plugin for a hypothetical host ecosystem
+[project.entry-points."image_utils_plugin_host.plugins"]
+image_alpha = "image_alpha_utils.gray2alpha:igray2alpha" # Example entry point
+
+# Command-line scripts
+# --------------------
+[project.scripts]
+imagealpha = "image_alpha_utils.gray2alpha:cli"
 
 # Version configuration using VCS (Git)
 [tool.hatch.version]
@@ -75,28 +86,23 @@ version_scheme = "post-release"
 
 # VCS hook configuration for version file generation
 [tool.hatch.build.hooks.vcs]
-version-file = "src/twat_image/__version__.py"
+version-file = "src/image_alpha_utils/__version__.py"
 
 # Default development environment configuration
 [tool.hatch.envs.default]
 dependencies = [
-    "pytest", # Testing framework
-    "pytest-cov", # Coverage reporting
-    "mypy>=1.15.0", # Static type checker
-    "ruff>=0.9.6", # Fast Python linter
     "pytest>=8.3.4", # Testing framework
     "pytest-cov>=6.0.0", # Coverage reporting
-    "ruff>=0.9.6", # Fast Python linter
     "mypy>=1.15.0", # Static type checker
-
+    "ruff>=0.9.6", # Fast Python linter
 ]
 
 # Scripts available in the default environment
 [tool.hatch.envs.default.scripts]
 test = "pytest {args:tests}"
-test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/twat_image --cov=tests {args:tests}"
-type-check = "mypy src/twat_image tests"
-lint = ["ruff check src/twat_image tests", "ruff format src/twat_image tests"]
+test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/image_alpha_utils --cov=tests {args:tests}"
+type-check = "mypy src/image_alpha_utils tests"
+lint = ["ruff check src/image_alpha_utils tests", "ruff format src/image_alpha_utils tests"]
 
 # Python version matrix for testing
 [[tool.hatch.envs.all.matrix]]
@@ -113,7 +119,7 @@ dependencies = [
 
 # Linting environment scripts
 [tool.hatch.envs.lint.scripts]
-typing = "mypy --install-types --non-interactive {args:src/twat_image tests}"
+typing = "mypy --install-types --non-interactive {args:src/image_alpha_utils tests}"
 style = ["ruff check {args:.}", "ruff format {args:.}"]
 fmt = ["ruff format {args:.}", "ruff check --fix {args:.}"]
 all = ["style", "typing"]
@@ -162,7 +168,7 @@ ignore = [
 
 # isort configuration within Ruff
 [tool.ruff.lint.isort]
-known-first-party = ["twat_image"] # Treat as first-party imports for sorting
+known-first-party = ["image_alpha_utils"] # Treat as first-party imports for sorting
 
 # flake8-tidy-imports configuration within Ruff
 [tool.ruff.lint.flake8-tidy-imports]
@@ -195,15 +201,15 @@ warn_unreachable = true
 
 # Coverage.py configuration for test coverage
 [tool.coverage.run]
-source_pkgs = ["twat_image", "tests"]
+source_pkgs = ["image_alpha_utils", "tests"]
 branch = true
 parallel = true
-omit = ["src/twat_image/__about__.py"]
+# omit = ["src/image_alpha_utils/__about__.py"] # No __about__.py file exists
 
 # Coverage path mappings
 [tool.coverage.paths]
-twat_image = ["src/twat_image", "*/twat-image/src/twat_image"]
-tests = ["tests", "*/twat-image/tests"]
+image_alpha_utils = ["src/image_alpha_utils", "*/image-alpha-utils/src/image_alpha_utils"]
+tests = ["tests", "*/image-alpha-utils/tests"]
 
 # Coverage report configuration
 [tool.coverage.report]
@@ -225,9 +231,11 @@ dev = [
 
 ]
 all = [
-    "twat>=1.8.1", # Main twat package
-    "pydantic>=2.10.6", # Data validation
-
+    "image_utils_plugin_host>=1.8.1", # Main plugin host package
+    "fire",
+    "numpy",
+    "pillow",
+    "webcolors",
 ]
 
 # Test environment configuration
@@ -237,7 +245,7 @@ dependencies = [".[test]"]
 # Test environment scripts
 [tool.hatch.envs.test.scripts]
 test = "python -m pytest -n auto {args:tests}"
-test-cov = "python -m pytest -n auto --cov-report=term-missing --cov-config=pyproject.toml --cov=src/twat_image --cov=tests {args:tests}"
+test-cov = "python -m pytest -n auto --cov-report=term-missing --cov-config=pyproject.toml --cov=src/image_alpha_utils --cov=tests {args:tests}"
 bench = "python -m pytest -v -p no:briefcase tests/test_benchmark.py --benchmark-only"
 bench-save = "python -m pytest -v -p no:briefcase tests/test_benchmark.py --benchmark-only --benchmark-json=benchmark/results.json"
 
