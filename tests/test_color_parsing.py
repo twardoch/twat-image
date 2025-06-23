@@ -152,4 +152,4 @@ def test_parse_color_invalid_hex_format_message():
 
 # Add a simple test to ensure the file can be imported by pytest
 def test_module_importable():
-    assert True
+    pass
