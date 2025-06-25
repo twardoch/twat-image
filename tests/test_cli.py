@@ -3,24 +3,27 @@
 import pytest
 import sys
 import io
-from pathlib import Path
 from unittest import mock
 from PIL import Image
 
 # Target import path
 from image_alpha_utils.gray2alpha import cli as gray2alpha_cli
-from image_alpha_utils.gray2alpha import igray2alpha # For verifying calls
+from image_alpha_utils.gray2alpha import igray2alpha  # For verifying calls
+
 
 # Helper to create a dummy image object
-def create_dummy_pil_image(mode="RGB", size=(10,10), color="red") -> Image.Image:
+def create_dummy_pil_image(mode="RGB", size=(10, 10), color="red") -> Image.Image:
     return Image.new(mode, size, color)
+
 
 @mock.patch("image_alpha_utils.gray2alpha.save_image")
 @mock.patch("image_alpha_utils.gray2alpha.open_image")
 def test_cli_simple_file_io(mock_open_image, mock_save_image):
     """Test basic CLI operation with input and output files."""
     dummy_input_img = create_dummy_pil_image()
-    mock_open_image.return_value.__enter__.return_value = dummy_input_img # Mock context manager
+    mock_open_image.return_value.__enter__.return_value = (
+        dummy_input_img  # Mock context manager
+    )
 
     # Expected processed image (mocked, not actually processed by igray2alpha here for simplicity of CLI test)
     # We're testing the CLI plumbing, not igray2alpha's logic itself (that's in other tests)
@@ -52,21 +55,26 @@ def test_cli_simple_file_io(mock_open_image, mock_save_image):
     saved_path_arg = mock_save_image.call_args[0][1]
 
     assert isinstance(saved_img_arg, Image.Image)
-    assert saved_img_arg.mode == "RGBA" # igray2alpha produces RGBA
+    assert saved_img_arg.mode == "RGBA"  # igray2alpha produces RGBA
     assert saved_path_arg == output_file
     # We could do a more detailed check on saved_img_arg if we knew exact output of igray2alpha
     # For now, confirming it's an image and was passed to save_image is good for CLI plumbing.
 
-@mock.patch("image_alpha_utils.gray2alpha.igray2alpha") # Mock the core processing
+
+@mock.patch("image_alpha_utils.gray2alpha.igray2alpha")  # Mock the core processing
 @mock.patch("image_alpha_utils.gray2alpha.save_image")
 @mock.patch("image_alpha_utils.gray2alpha.open_image")
-def test_cli_parameters_passed_to_igray2alpha(mock_open_image, mock_save_image, mock_igray2alpha_func):
+def test_cli_parameters_passed_to_igray2alpha(
+    mock_open_image, mock_save_image, mock_igray2alpha_func
+):
     """Test that CLI parameters are correctly passed to the igray2alpha function."""
-    dummy_input_img = create_dummy_pil_image(mode='L') # Input for igray2alpha is PIL Image
+    dummy_input_img = create_dummy_pil_image(
+        mode="L"
+    )  # Input for igray2alpha is PIL Image
     mock_open_image.return_value.__enter__.return_value = dummy_input_img
 
     # The mock_igray2alpha_func will return another dummy image to be passed to save_image
-    dummy_output_img = create_dummy_pil_image(mode='RGBA')
+    dummy_output_img = create_dummy_pil_image(mode="RGBA")
     mock_igray2alpha_func.return_value = dummy_output_img
 
     input_file = "in.jpg"
@@ -77,13 +85,16 @@ def test_cli_parameters_passed_to_igray2alpha(mock_open_image, mock_save_image, 
 
     # Test with all parameters
     test_args = [
-        "gray2alpha", # Script name, usually sys.argv[0] but fire doesn't use it for dispatch
+        "gray2alpha",  # Script name, usually sys.argv[0] but fire doesn't use it for dispatch
         input_file,
         output_file,
-        "--color", color_arg,
-        "--white_point", str(wp_arg),
-        "--black_point", str(bp_arg),
-        "--negative", # This means negative=True
+        "--color",
+        color_arg,
+        "--white_point",
+        str(wp_arg),
+        "--black_point",
+        str(bp_arg),
+        "--negative",  # This means negative=True
     ]
 
     with mock.patch.object(sys, "argv", test_args):
@@ -98,7 +109,7 @@ def test_cli_parameters_passed_to_igray2alpha(mock_open_image, mock_save_image, 
         color=color_arg,
         white_point=wp_arg,
         black_point=bp_arg,
-        negative=True
+        negative=True,
     )
     mock_save_image.assert_called_once_with(dummy_output_img, output_file)
 
@@ -127,7 +138,7 @@ def test_cli_input_file_not_found(mock_open_image, mock_stderr):
     assert "File not found: input.jpg" in mock_stderr.getvalue()
 
 
-@mock.patch("sys.stdout", new_callable=io.BytesIO) # For binary image data
+@mock.patch("sys.stdout", new_callable=io.BytesIO)  # For binary image data
 @mock.patch("image_alpha_utils.gray2alpha.open_image")
 def test_cli_stdout_output(mock_open_image, mock_stdout_bytes):
     """Test CLI writing to stdout when output_path is '-'."""
@@ -135,9 +146,9 @@ def test_cli_stdout_output(mock_open_image, mock_stdout_bytes):
     mock_open_image.return_value.__enter__.return_value = dummy_input_img
 
     # This will be the actual processed image by igray2alpha
-    expected_output_img = igray2alpha(dummy_input_img, color="black") # Default color
+    expected_output_img = igray2alpha(dummy_input_img, color="black")  # Default color
 
-    test_args = ["gray2alpha", "input.jpg", "-"] # Output to stdout
+    test_args = ["gray2alpha", "input.jpg", "-"]  # Output to stdout
 
     with mock.patch.object(sys, "argv", test_args):
         try:
@@ -159,7 +170,7 @@ def test_cli_stdout_output(mock_open_image, mock_stdout_bytes):
     assert list(img_from_stdout.getdata()) == list(expected_output_img.getdata())
 
 
-@mock.patch("image_alpha_utils.gray2alpha.save_image") # To prevent actual file saving
+@mock.patch("image_alpha_utils.gray2alpha.save_image")  # To prevent actual file saving
 @mock.patch("sys.stdin.buffer", new_callable=io.BytesIO)
 def test_cli_stdin_input(mock_stdin_bytes, mock_save_image):
     """Test CLI reading from stdin when input_path is '-'."""
@@ -169,7 +180,7 @@ def test_cli_stdin_input(mock_stdin_bytes, mock_save_image):
     mock_stdin_bytes.seek(0)
 
     output_file = "output_from_stdin.png"
-    test_args = ["gray2alpha", "-", output_file] # Input from stdin
+    test_args = ["gray2alpha", "-", output_file]  # Input from stdin
 
     with mock.patch.object(sys, "argv", test_args):
         try:
@@ -190,7 +201,7 @@ def test_cli_stdin_input(mock_stdin_bytes, mock_save_image):
     # process it with igray2alpha, then compare to saved_img_arg.
     dummy_input_img_content.seek(0)
     original_pil_img = Image.open(dummy_input_img_content)
-    expected_processed_img = igray2alpha(original_pil_img) # default params
+    expected_processed_img = igray2alpha(original_pil_img)  # default params
 
     assert list(saved_img_arg.getdata()) == list(expected_processed_img.getdata())
 
@@ -204,7 +215,13 @@ def test_cli_invalid_color_parameter(mock_stderr):
     with mock.patch("image_alpha_utils.gray2alpha.open_image") as mock_open:
         mock_open.return_value.__enter__.return_value = create_dummy_pil_image()
 
-        test_args = ["gray2alpha", "dummy.png", "out.png", "--color", "invalid_color_name_xyz"]
+        test_args = [
+            "gray2alpha",
+            "dummy.png",
+            "out.png",
+            "--color",
+            "invalid_color_name_xyz",
+        ]
         with mock.patch.object(sys, "argv", test_args):
             try:
                 gray2alpha_cli()
@@ -216,6 +233,7 @@ def test_cli_invalid_color_parameter(mock_stderr):
         error_output = mock_stderr.getvalue()
         assert "ValueError" in error_output
         assert "Invalid color specification: 'invalid_color_name_xyz'" in error_output
+
 
 # This test file assumes that the CLI entry point is correctly set up
 # in pyproject.toml to call image_alpha_utils.gray2alpha:cli

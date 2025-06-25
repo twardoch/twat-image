@@ -114,7 +114,14 @@ detached = true # Run in isolated environment
 dependencies = [
     "mypy>=1.15.0", # Static type checker
     "ruff>=0.9.6", # Fast Python linter
-
+    # Add project's direct runtime dependencies for MyPy analysis
+    "fire",
+    "numpy",
+    "pillow",
+    "webcolors",
+    "types-Pillow",
+    # pytest is needed for test file analysis by mypy if not already pulled in
+    "pytest>=8.3.4",
 ]
 
 # Linting environment scripts
@@ -198,6 +205,13 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 warn_no_return = true
 warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = [
+    "fire",
+    "webcolors"
+]
+ignore_missing_imports = true
 
 # Coverage.py configuration for test coverage
 [tool.coverage.run]

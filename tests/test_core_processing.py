@@ -1,24 +1,26 @@
 """Tests for the core igray2alpha processing function."""
 
-import pytest
 import numpy as np
-from PIL import Image, ImageOps
+from PIL import Image
 
 # Assuming correct import path after rename
 from image_alpha_utils.gray2alpha import igray2alpha, parse_color
 
+
 # Helper to create an RGB image (as igray2alpha converts to 'L' internally)
-def create_rgb_image(pixels: list[list[tuple[int,int,int]]]) -> Image.Image:
+def create_rgb_image(pixels: list[list[tuple[int, int, int]]]) -> Image.Image:
     np_array = np.array(pixels, dtype=np.uint8)
-    return Image.fromarray(np_array, mode='RGB')
+    return Image.fromarray(np_array, mode="RGB")
+
 
 # Helper to create a grayscale image
 def create_gray_image(pixels: list[list[int]]) -> Image.Image:
     np_array = np.array(pixels, dtype=np.uint8)
-    return Image.fromarray(np_array, mode='L')
+    return Image.fromarray(np_array, mode="L")
+
 
 # Helper to get pixel data from RGBA image
-def get_rgba_pixel_data(img: Image.Image) -> list[list[tuple[int,int,int,int]]]:
+def get_rgba_pixel_data(img: Image.Image) -> list[list[tuple[int, int, int, int]]]:
     return np.array(img.convert("RGBA")).tolist()
 
 
@@ -55,9 +57,9 @@ def test_igray2alpha_simple_case_defaults():
     #    Inverted mask for alpha: 255-0=255, 255-255=0. So alpha channel is [[255, 0]].
     #    Resulting RGBA: [[(0,0,0,255), (0,0,0,0)]]
 
-    expected_rgba_pixels = [[(0,0,0,255), (0,0,0,0)]]
+    expected_rgba_pixels = [[(0, 0, 0, 255), (0, 0, 0, 0)]]
 
-    result_img = igray2alpha(input_img) # All defaults
+    result_img = igray2alpha(input_img)  # All defaults
     assert result_img.mode == "RGBA"
     assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
 
@@ -68,7 +70,7 @@ def test_igray2alpha_custom_color_and_points_negative_true():
     input_gray_pixels = [[0, 75, 150, 225, 255]]
     input_img = create_gray_image(input_gray_pixels)
 
-    custom_color = "blue" # (0,0,255)
+    custom_color = "blue"  # (0,0,255)
     custom_color_rgb = parse_color(custom_color)
     white_point = 0.8  # Pixels >= 0.8*255=204 become white in normalized mask
     black_point = 0.2  # Pixels <= 0.2*255=51 become black in normalized mask
@@ -98,29 +100,34 @@ def test_igray2alpha_custom_color_and_points_negative_true():
     #    (0,0,255,255)
     #    (0,0,255,255)
 
-    expected_rgba_pixels = [[
-        (custom_color_rgb[0], custom_color_rgb[1], custom_color_rgb[2], 0),
-        (custom_color_rgb[0], custom_color_rgb[1], custom_color_rgb[2], 40),
-        (custom_color_rgb[0], custom_color_rgb[1], custom_color_rgb[2], 165),
-        (custom_color_rgb[0], custom_color_rgb[1], custom_color_rgb[2], 255),
-        (custom_color_rgb[0], custom_color_rgb[1], custom_color_rgb[2], 255),
-    ]]
+    expected_rgba_pixels = [
+        [
+            (custom_color_rgb[0], custom_color_rgb[1], custom_color_rgb[2], 0),
+            (custom_color_rgb[0], custom_color_rgb[1], custom_color_rgb[2], 40),
+            (custom_color_rgb[0], custom_color_rgb[1], custom_color_rgb[2], 165),
+            (custom_color_rgb[0], custom_color_rgb[1], custom_color_rgb[2], 255),
+            (custom_color_rgb[0], custom_color_rgb[1], custom_color_rgb[2], 255),
+        ]
+    ]
 
-    result_img = igray2alpha(input_img,
-                             color=custom_color,
-                             white_point=white_point,
-                             black_point=black_point,
-                             negative=True)
+    result_img = igray2alpha(
+        input_img,
+        color=custom_color,
+        white_point=white_point,
+        black_point=black_point,
+        negative=True,
+    )
     assert result_img.mode == "RGBA"
     assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
 
+
 def test_igray2alpha_input_image_not_modified():
     """Ensure the input Pillow image object is not modified."""
-    input_pixels = [[(10,20,30)]]
+    input_pixels = [[(10, 20, 30)]]
     input_img = create_rgb_image(input_pixels)
-    original_data = np.array(input_img).copy() # Copy data before processing
+    original_data = np.array(input_img).copy()  # Copy data before processing
 
-    igray2alpha(input_img) # Call with defaults
+    igray2alpha(input_img)  # Call with defaults
 
     # Check that original image data is unchanged
     assert np.array_equal(np.array(input_img), original_data)
@@ -145,15 +152,19 @@ def test_igray2alpha_percentage_thresholds():
     # 255-255 = 0
     # Alpha channel: [[255, 181, 74, 0]]
 
-    expected_color_rgb = (0,0,0)
-    expected_rgba_pixels = [[
-        (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 255),
-        (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 181),
-        (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 74),
-        (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 0),
-    ]]
+    expected_color_rgb = (0, 0, 0)
+    expected_rgba_pixels = [
+        [
+            (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 255),
+            (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 181),
+            (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 74),
+            (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 0),
+        ]
+    ]
 
-    result_img = igray2alpha(input_img, color="black", white_point=10, black_point=10, negative=False)
+    result_img = igray2alpha(
+        input_img, color="black", white_point=10, black_point=10, negative=False
+    )
     assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
 
 
@@ -161,7 +172,7 @@ def test_igray2alpha_flat_image_input():
     """Test with a flat color input image."""
     # All pixels are (128, 128, 128)
     # Grayscale conversion: [[128, 128], [128, 128]]
-    input_img = Image.new("RGB", (2,2), (128,128,128))
+    input_img = Image.new("RGB", (2, 2), (128, 128, 128))
 
     # normalize_grayscale behavior for flat image [[128,128],[128,128]]:
     # Autocontrast makes it [[0,0],[0,0]].
@@ -173,10 +184,16 @@ def test_igray2alpha_flat_image_input():
     # Inverted mask: [[255,255],[255,255]].
     # Resulting RGBA: all (0,0,0,255) - fully opaque black.
 
-    expected_color_rgb = (0,0,0)
+    expected_color_rgb = (0, 0, 0)
     expected_rgba_pixels = [
-        [(expected_color_rgb[0],expected_color_rgb[1],expected_color_rgb[2],255), (expected_color_rgb[0],expected_color_rgb[1],expected_color_rgb[2],255)],
-        [(expected_color_rgb[0],expected_color_rgb[1],expected_color_rgb[2],255), (expected_color_rgb[0],expected_color_rgb[1],expected_color_rgb[2],255)],
+        [
+            (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 255),
+            (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 255),
+        ],
+        [
+            (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 255),
+            (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 255),
+        ],
     ]
 
     result_img = igray2alpha(input_img)
@@ -186,7 +203,7 @@ def test_igray2alpha_flat_image_input():
     # Grayscale: [[255,255],[255,255]]
     # normalize_grayscale on this (due to autocontrast of flat white image to black): [[0,0],[0,0]]
     # Same result as above.
-    input_white_img = Image.new("RGB", (2,2), (255,255,255))
+    input_white_img = Image.new("RGB", (2, 2), (255, 255, 255))
     result_white_img = igray2alpha(input_white_img)
     assert get_rgba_pixel_data(result_white_img) == expected_rgba_pixels
 
@@ -194,7 +211,7 @@ def test_igray2alpha_flat_image_input():
     # Grayscale: [[0,0],[0,0]]
     # normalize_grayscale on this: [[0,0],[0,0]]
     # Same result as above.
-    input_black_img = Image.new("RGB", (2,2), (0,0,0))
+    input_black_img = Image.new("RGB", (2, 2), (0, 0, 0))
     result_black_img = igray2alpha(input_black_img)
     assert get_rgba_pixel_data(result_black_img) == expected_rgba_pixels
     # This behavior with flat images (always resulting in opaque black with default settings)
@@ -207,26 +224,34 @@ def test_igray2alpha_flat_image_input():
     # This is because `autocontrast` makes any flat image into all 0s.
     # So, with `negative=True`, any flat input image becomes fully transparent.
 
+
 def test_igray2alpha_flat_image_negative_true():
     """Test flat image with negative=True."""
-    input_img = Image.new("RGB", (2,2), (128,128,128)) # Flat gray
+    input_img = Image.new("RGB", (2, 2), (128, 128, 128))  # Flat gray
     # Normalized mask will be [[0,0],[0,0]] (due to autocontrast)
     # With negative=True, alpha is taken directly from this mask.
     # So, alpha channel is [[0,0],[0,0]]
-    expected_color_rgb = (0,0,0) # Default color black
+    expected_color_rgb = (0, 0, 0)  # Default color black
     expected_rgba_pixels = [
-        [(expected_color_rgb[0],expected_color_rgb[1],expected_color_rgb[2],0), (expected_color_rgb[0],expected_color_rgb[1],expected_color_rgb[2],0)],
-        [(expected_color_rgb[0],expected_color_rgb[1],expected_color_rgb[2],0), (expected_color_rgb[0],expected_color_rgb[1],expected_color_rgb[2],0)],
+        [
+            (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 0),
+            (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 0),
+        ],
+        [
+            (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 0),
+            (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 0),
+        ],
     ]
     result_img = igray2alpha(input_img, negative=True)
     assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
+
 
 # Consider adding a test for an image that already has an alpha channel.
 # igray2alpha converts to 'L' mode, which discards existing alpha. This is expected.
 def test_igray2alpha_input_with_alpha():
     """Test with an input image that already has an alpha channel."""
     # Create an RGBA image with some transparency
-    input_rgba_img = Image.new("RGBA", (1,1), (100,150,200,50))
+    input_rgba_img = Image.new("RGBA", (1, 1), (100, 150, 200, 50))
 
     # Expected: alpha channel is ignored, image converted to 'L' based on RGB.
     # RGB (100,150,200) -> L ~ (100*0.299 + 150*0.587 + 200*0.114) = 29.9 + 88.05 + 22.8 = 140.75 -> 141
@@ -238,6 +263,6 @@ def test_igray2alpha_input_with_alpha():
     #   Mask [[0]], inverted for alpha -> [[255]]
     #   Result: (0,0,0,255)
 
-    expected_rgba_pixels = [[(0,0,0,255)]]
+    expected_rgba_pixels = [[(0, 0, 0, 255)]]
     result_img = igray2alpha(input_rgba_img)
     assert get_rgba_pixel_data(result_img) == expected_rgba_pixels

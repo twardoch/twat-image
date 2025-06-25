@@ -11,15 +11,17 @@ from __future__ import annotations
 import re
 import sys
 from pathlib import Path
-from typing import Union
 
 import fire
 import numpy as np
 import webcolors
 from PIL import Image, ImageOps
 
+# Constants
+MAX_COLOR_VALUE = 255
+
 # Type alias for color specifications.
-ColorSpec = Union[str, tuple[int, int, int]]
+ColorSpec = str | tuple[int, int, int]
 
 
 def parse_color(color_spec: ColorSpec) -> tuple[int, int, int]:
@@ -40,7 +42,9 @@ def parse_color(color_spec: ColorSpec) -> tuple[int, int, int]:
       ValueError: If the specification is invalid.
     """
     match color_spec:
-        case (r, g, b) if all(isinstance(x, int) and 0 <= x <= 255 for x in (r, g, b)):
+        case (r, g, b) if all(
+            isinstance(x, int) and 0 <= x <= MAX_COLOR_VALUE for x in (r, g, b)
+        ):
             return (r, g, b)
         case str() as s:
             s = s.strip().lower()
@@ -55,10 +59,10 @@ def parse_color(color_spec: ColorSpec) -> tuple[int, int, int]:
                 return webcolors.name_to_rgb(s)
             except ValueError:
                 msg = f"Invalid color specification: {color_spec!r}"
-                raise ValueError(msg)
+                raise ValueError(msg) from None
         case _:
             msg = f"Color must be a string or an RGB tuple, got: {color_spec!r}"
-            raise ValueError(msg)
+            raise ValueError(msg) from None  # Also apply here for consistency
 
 
 def normalize_grayscale(
@@ -76,13 +80,13 @@ def normalize_grayscale(
     Args:
       img: Input PIL grayscale ('L' mode) image.
       white_point: The threshold (0.0-1.0) above which pixels in the
-        autocontrasted image are mapped to pure white (255).
-        If `white_point` > 1, it's treated as a percentage (e.g., 10 for 10%).
-        The conversion for percentage `wp_perc` is `1.0 - (wp_perc / 100.0)`.
-        Example: `white_point=10` (10%) means threshold `0.9`.
-        This might seem counter-intuitive: `white_point=10` (percent) means
-        the brightest 10% of the range (after autocontrast) will be mapped to white.
-        Default is `0.9`.
+        autocontrasted image are mapped to pure white (255). Default is `0.9`.
+        If `white_point` > 1, it's treated as a percentage that defines how much
+        of the brightest end of the spectrum is saturated to white.
+        For example, `white_point=10` (for 10%) means the brightest 10% of the
+        pixel value range (after autocontrast) will be mapped to pure white.
+        This corresponds to an internal threshold of `1.0 - (percentage / 100.0)`,
+        so `white_point=10` results in a threshold of `0.9`. Values >= 0.9 become white.
       black_point: The threshold (0.0-1.0) below which pixels in the
         autocontrasted image are mapped to pure black (0).
         If `black_point` > 1, it's treated as a percentage (e.g., 10 for 10%).
@@ -131,7 +135,7 @@ def normalize_grayscale(
 
 
 def create_alpha_image(
-    mask: Image.Image, color: ColorSpec = "black", negative: bool = False
+    mask: Image.Image, color: ColorSpec = "black", *, negative: bool = False
 ) -> Image.Image:
     """Create a colored RGBA image using the given grayscale mask as alpha.
 
@@ -199,6 +203,7 @@ def igray2alpha(
     color: ColorSpec = "black",
     white_point: float = 0.9,
     black_point: float = 0.1,
+    *,
     negative: bool = False,
 ) -> Image.Image:
     """Convert an image by normalizing its grayscale version and applying an alpha mask.
@@ -233,15 +238,16 @@ def igray2alpha(
     """
     gray = img.convert("L")
     normalized = normalize_grayscale(gray, white_point, black_point)
-    return create_alpha_image(normalized, color, negative)
+    return create_alpha_image(normalized, color, negative=negative)
 
 
-def gray2alpha(
+def gray2alpha(  # noqa: PLR0913
     input_path: str | Path = "-",
     output_path: str | Path = "-",
     color: ColorSpec = "black",
     white_point: float = 0.9,
     black_point: float = 0.1,
+    *,
     negative: bool = False,
 ) -> None:
     """CLI function to read an image, process it using igray2alpha, and save.
@@ -267,7 +273,7 @@ def gray2alpha(
     """
     # Exceptions will be caught and reported by `fire` at the CLI level.
     with open_image(input_path) as img:
-        result = igray2alpha(img, color, white_point, black_point, negative)
+        result = igray2alpha(img, color, white_point, black_point, negative=negative)
     save_image(result, output_path)
 
 
