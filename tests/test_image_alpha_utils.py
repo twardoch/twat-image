@@ -1,8 +1,8 @@
-"""Test suite for twat_image."""
+"""Test suite for image_alpha_utils."""
+
+import image_alpha_utils
 
 
 def test_version():
     """Verify package exposes version."""
-    import image_alpha_utils
-
     assert image_alpha_utils.__version__

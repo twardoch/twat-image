@@ -4,16 +4,16 @@ globs:
 ---
 # About this project
 
-`twat-fs` is a file system utility library focused on robust and extensible file upload capabilities with multiple provider support. It provides:
+`image-alpha-utils` is a Python utility for converting images to include alpha channels based on grayscale values, and other image manipulations. It provides:
 
-- Multi-provider upload system with smart fallback (catbox.moe default, plus Dropbox, S3, etc.)
-- Automatic retry for temporary failures, fallback for permanent ones
-- URL validation and clean developer experience with type hints
-- Simple CLI: `python -m twat_fs upload_file path/to/file.txt`
-- Easy installation: `uv pip install twat-fs` (basic) or `uv pip install 'twat-fs[all,dev]'` (all features)
+- Library functions for programmatic image processing.
+- A command-line interface (`imagealpha`) for direct use.
+- Functionality to normalize grayscale images and create alpha masks.
+- Color parsing for flexible color specifications.
+- Support for reading from and writing to files or stdin/stdout.
 
 ## Development Notes
-- Uses `uv` for Python package management
-- Quality tools: ruff, mypy, pytest
-- Clear provider protocol for adding new storage backends
-- Strong typing and runtime checks throughout
+- Uses `uv` and `hatch` for Python package and project management.
+- Quality tools: `ruff` (linting/formatting), `mypy` (type checking), `pytest` (testing).
+- Follows modern Python packaging standards (PEP 621).
+- Strong typing and clear API design are emphasized.

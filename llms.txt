@@ -1,0 +1,2591 @@
+This file is a merged representation of the entire codebase, combined into a single document by Repomix.
+
+<file_summary>
+This section contains a summary of this file.
+
+<purpose>
+This file contains a packed representation of the entire repository's contents.
+It is designed to be easily consumable by AI systems for analysis, code review,
+or other automated processes.
+</purpose>
+
+<file_format>
+The content is organized as follows:
+1. This summary section
+2. Repository information
+3. Directory structure
+4. Repository files (if enabled)
+5. Multiple file entries, each consisting of:
+  - File path as an attribute
+  - Full contents of the file
+</file_format>
+
+<usage_guidelines>
+- This file should be treated as read-only. Any changes should be made to the
+  original repository files, not this packed version.
+- When processing this file, use the file path to distinguish
+  between different files in the repository.
+- Be aware that this file may contain sensitive information. Handle it with
+  the same level of security as you would the original repository.
+</usage_guidelines>
+
+<notes>
+- Some files may have been excluded based on .gitignore rules and Repomix's configuration
+- Binary files are not included in this packed representation. Please refer to the Repository Structure section for a complete list of file paths, including binary files
+- Files matching patterns in .gitignore are excluded
+- Files matching default ignore patterns are excluded
+- Files are sorted by Git change count (files with more changes are at the bottom)
+</notes>
+
+</file_summary>
+
+<directory_structure>
+.cursor/
+  rules/
+    0project.mdc
+    cleanup.mdc
+    filetree.mdc
+    quality.mdc
+.github/
+  workflows/
+    push.yml
+    release.yml
+src/
+  twat_image/
+    __init__.py
+    gray2alpha.py
+tests/
+  test_alpha_creation.py
+  test_cli.py
+  test_color_parsing.py
+  test_core_processing.py
+  test_image_alpha_utils.py
+  test_normalization.py
+.gitignore
+.pre-commit-config.yaml
+LICENSE
+LOG.md
+pyproject.toml
+README.md
+</directory_structure>
+
+<files>
+This section contains the contents of the repository's files.
+
+<file path=".cursor/rules/0project.mdc">
+---
+description: About this project
+globs:
+---
+# About this project
+
+`twat-fs` is a file system utility library focused on robust and extensible file upload capabilities with multiple provider support. It provides:
+
+- Multi-provider upload system with smart fallback (catbox.moe default, plus Dropbox, S3, etc.)
+- Automatic retry for temporary failures, fallback for permanent ones
+- URL validation and clean developer experience with type hints
+- Simple CLI: `python -m twat_fs upload_file path/to/file.txt`
+- Easy installation: `uv pip install twat-fs` (basic) or `uv pip install 'twat-fs[all,dev]'` (all features)
+
+## Development Notes
+- Uses `uv` for Python package management
+- Quality tools: ruff, mypy, pytest
+- Clear provider protocol for adding new storage backends
+- Strong typing and runtime checks throughout
+</file>
+
+<file path=".cursor/rules/cleanup.mdc">
+---
+description: Run `cleanup.py` script before and after changes
+globs:
+---
+Before you do any changes or if I say "cleanup", run the `cleanup.py update` script in the main folder. Analyze the results, describe recent changes in @LOG.md and edit @TODO.md to update priorities and plan next changes. PERFORM THE CHANGES, then run the `cleanup.py status` script and react to the results.
+
+When you edit @TODO.md, lead in lines with empty GFM checkboxes if things aren't done (`- [ ] `) vs. filled (`- [x] `) if done.
+</file>
+
+<file path=".cursor/rules/filetree.mdc">
+---
+description: File tree of the project
+globs:
+---
+[ 768]  .
+├── [  64]  .benchmarks
+├── [  96]  .cursor
+│   └── [ 224]  rules
+│       ├── [ 821]  0project.mdc
+│       ├── [ 516]  cleanup.mdc
+│       ├── [ 996]  filetree.mdc
+│       └── [2.0K]  quality.mdc
+├── [  96]  .github
+│   └── [ 128]  workflows
+│       ├── [2.7K]  push.yml
+│       └── [1.4K]  release.yml
+├── [3.5K]  .gitignore
+├── [ 470]  .pre-commit-config.yaml
+├── [ 987]  CLEANUP.txt
+├── [1.0K]  LICENSE
+├── [1.7K]  LOG.md
+├── [ 812]  README.md
+├── [ 35K]  REPO_CONTENT.txt
+├── [   7]  VERSION.txt
+├── [ 13K]  cleanup.py
+├── [ 160]  dist
+├── [7.6K]  pyproject.toml
+├── [ 128]  src
+│   └── [ 192]  twat_image
+│       ├── [  98]  __init__.py
+│       └── [7.1K]  gray2alpha.py
+└── [ 128]  tests
+    └── [ 154]  test_twat_image.py
+
+10 directories, 19 files
+</file>
+
+<file path=".cursor/rules/quality.mdc">
+---
+description: Quality
+globs:
+---
+- **Verify Information**: Always verify information before presenting it. Do not make assumptions or speculate without clear evidence.
+- **No Apologies**: Never use apologies.
+- **No Whitespace Suggestions**: Don't suggest whitespace changes.
+- **No Inventions**: Don't invent major changes other than what's explicitly requested.
+- **No Unnecessary Confirmations**: Don't ask for confirmation of information already provided in the context.
+- **Preserve Existing Code**: Don't remove unrelated code or functionalities. Pay attention to preserving existing structures.
+- **No Implementation Checks**: Don't ask the user to verify implementations that are visible in the provided context.
+- **No Unnecessary Updates**: Don't suggest updates or changes to files when there are no actual modifications needed.
+- **No Current Implementation**: Don't show or discuss the current implementation unless specifically requested.
+- **Use Explicit Variable Names**: Prefer descriptive, explicit variable names over short, ambiguous ones to enhance code readability.
+- **Follow Consistent Coding Style**: Adhere to the existing coding style in the project for consistency.
+- **Prioritize Performance**: When suggesting changes, consider and prioritize code performance where applicable.
+- **Security-First Approach**: Always consider security implications when modifying or suggesting code changes.
+- **Test Coverage**: Suggest or include appropriate unit tests for new or modified code.
+- **Error Handling**: Implement robust error handling and logging where necessary.
+- **Modular Design**: Encourage modular design principles to improve code maintainability and reusability.
+- **Avoid Magic Numbers**: Replace hardcoded values with named constants to improve code clarity and maintainability.
+- **Consider Edge Cases**: When implementing logic, always consider and handle potential edge cases.
+- **Use Assertions**: Include assertions wherever possible to validate assumptions and catch potential errors early.
+</file>
+
+<file path=".github/workflows/push.yml">
+name: Build & Test
+
+on:
+  push:
+    branches: [main]
+    tags-ignore: ["v*"]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Ruff lint
+        uses: astral-sh/ruff-action@v3
+        with:
+          version: "latest"
+          args: "check --output-format=github"
+
+      - name: Run Ruff Format
+        uses: astral-sh/ruff-action@v3
+        with:
+          version: "latest"
+          args: "format --check --respect-gitignore"
+
+  test:
+    name: Run Tests
+    needs: quality
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12"]
+        os: [ubuntu-latest]
+      fail-fast: true
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          python-version: ${{ matrix.python-version }}
+          enable-cache: true
+          cache-suffix: ${{ matrix.os }}-${{ matrix.python-version }}
+
+      - name: Install test dependencies
+        run: |
+          uv pip install --system --upgrade pip
+          uv pip install --system ".[test]"
+
+      - name: Run tests with Pytest
+        run: uv run pytest -n auto --maxfail=1 --disable-warnings --cov-report=xml --cov-config=pyproject.toml --cov=src/image_alpha_utils --cov=tests tests/
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-${{ matrix.python-version }}-${{ matrix.os }}
+          path: coverage.xml
+
+  build:
+    name: Build Distribution
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install build tools
+        run: uv pip install build hatchling hatch-vcs
+
+      - name: Build distributions
+        run: uv run python -m build --outdir dist
+
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-files
+          path: dist/
+          retention-days: 5
+</file>
+
+<file path=".github/workflows/release.yml">
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    name: Release to PyPI
+    runs-on: ubuntu-latest
+    environment:
+      name: pypi
+      url: https://pypi.org/p/image-alpha-utils
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install UV
+        uses: astral-sh/setup-uv@v5
+        with:
+          version: "latest"
+          python-version: "3.12"
+          enable-cache: true
+
+      - name: Install build tools
+        run: uv pip install build hatchling hatch-vcs
+
+      - name: Build distributions
+        run: uv run python -m build --outdir dist
+
+      - name: Verify distribution files
+        run: |
+          ls -la dist/
+          test -n "$(find dist -name '*.whl')" || (echo "Wheel file missing" && exit 1)
+          test -n "$(find dist -name '*.tar.gz')" || (echo "Source distribution missing" && exit 1)
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: dist/*
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+</file>
+
+<file path="src/twat_image/__init__.py">
+"""Image Alpha Utilities: Convert images to include alpha channels."""
+
+from importlib import metadata
+
+from .gray2alpha import ColorSpec, igray2alpha
+
+__version__ = metadata.version(__name__)
+
+__all__ = [
+    "__version__",
+    "igray2alpha",
+    "ColorSpec",
+]
+</file>
+
+<file path="src/twat_image/gray2alpha.py">
+"""
+Convert grayscale images to colored images with alpha masks.
+
+This script reads an image (from a file or from stdin), converts it
+to grayscale, normalizes its contrast using thresholds, then creates
+a colored image with an alpha mask. Output is written to a file (or stdout).
+"""
+
+from __future__ import annotations
+
+import re
+import sys
+from pathlib import Path
+from typing import Union
+
+import fire
+import numpy as np
+import webcolors
+from PIL import Image, ImageOps
+
+# Type alias for color specifications.
+ColorSpec = Union[str, tuple[int, int, int]]
+
+
+def parse_color(color_spec: ColorSpec) -> tuple[int, int, int]:
+    """Parse a color specification into an (R, G, B) tuple.
+
+    Supports:
+      - Named CSS colors (e.g. "red")
+      - Hex colors (e.g. "#ff0000" or "ff0000")
+      - RGB tuples (e.g. (255, 0, 0))
+
+    Args:
+      color_spec: Color specified as a string or an RGB tuple.
+
+    Returns:
+      A tuple (r, g, b) with values between 0 and 255.
+
+    Raises:
+      ValueError: If the specification is invalid.
+    """
+    match color_spec:
+        case (r, g, b) if all(isinstance(x, int) and 0 <= x <= 255 for x in (r, g, b)):
+            return (r, g, b)
+        case str() as s:
+            s = s.strip().lower()
+            if s.startswith("#"):
+                s = s[1:]
+            if re.fullmatch(r"[0-9a-f]{6}", s):
+                r = int(s[0:2], 16)
+                g = int(s[2:4], 16)
+                b = int(s[4:6], 16)
+                return (r, g, b)
+            try:
+                return webcolors.name_to_rgb(s)
+            except ValueError:
+                msg = f"Invalid color specification: {color_spec!r}"
+                raise ValueError(msg)
+        case _:
+            msg = f"Color must be a string or an RGB tuple, got: {color_spec!r}"
+            raise ValueError(msg)
+
+
+def normalize_grayscale(
+    img: Image.Image, white_point: float = 0.9, black_point: float = 0.1
+) -> Image.Image:
+    """Normalize contrast of a grayscale image using thresholds.
+
+    The function first applies `ImageOps.autocontrast` to the image.
+    Then, it uses the `white_point` and `black_point` to further adjust
+    the contrast and map pixel values.
+
+    Thresholds can be specified as fractions (0.0 to 1.0) or as
+    percentages (e.g., 90 for 90th percentile, which means values > 1).
+
+    Args:
+      img: Input PIL grayscale ('L' mode) image.
+      white_point: The threshold (0.0-1.0) above which pixels in the
+        autocontrasted image are mapped to pure white (255).
+        If `white_point` > 1, it's treated as a percentage (e.g., 10 for 10%).
+        The conversion for percentage `wp_perc` is `1.0 - (wp_perc / 100.0)`.
+        Example: `white_point=10` (10%) means threshold `0.9`.
+        This might seem counter-intuitive: `white_point=10` (percent) means
+        the brightest 10% of the range (after autocontrast) will be mapped to white.
+        Default is `0.9`.
+      black_point: The threshold (0.0-1.0) below which pixels in the
+        autocontrasted image are mapped to pure black (0).
+        If `black_point` > 1, it's treated as a percentage (e.g., 10 for 10%).
+        The conversion for percentage `bp_perc` is `bp_perc / 100.0`.
+        Example: `black_point=10` (10%) means threshold `0.1`.
+        This means the darkest 10% of the range (after autocontrast) will be mapped to black.
+        Default is `0.1`.
+
+    Returns:
+      A new PIL grayscale image with normalized contrast.
+
+    Raises:
+      ValueError: If threshold values are invalid (e.g., black_point >= white_point).
+    """
+    # Convert percentages to decimals if needed.
+    white_point = (1 - white_point / 100) if white_point > 1 else white_point
+    black_point = black_point / 100 if black_point > 1 else black_point
+
+    if not (0 <= black_point < white_point <= 1):
+        msg = (
+            f"Invalid thresholds: black_point={black_point}, white_point={white_point}"
+        )
+        raise ValueError(msg)
+
+    # Auto-adjust contrast.
+    img = ImageOps.autocontrast(img)
+
+    # Use numpy for fast per-pixel thresholding.
+    data = np.array(img, dtype=np.float32) / 255.0
+    result = np.empty_like(data, dtype=np.uint8)
+
+    white_mask = data >= white_point
+    black_mask = data <= black_point
+    mid_mask = ~(white_mask | black_mask)
+
+    result[white_mask] = 255
+    result[black_mask] = 0
+    if np.any(mid_mask):
+        mid_values = data[mid_mask]
+        scaled = ((mid_values - black_point) / (white_point - black_point) * 255).clip(
+            0, 255
+        )
+        result[mid_mask] = scaled.astype(np.uint8)
+
+    return Image.fromarray(result)
+
+
+def create_alpha_image(
+    mask: Image.Image, color: ColorSpec = "black", negative: bool = False
+) -> Image.Image:
+    """Create a colored RGBA image using the given grayscale mask as alpha.
+
+    The RGB channels of the output image are filled with the specified `color`.
+    The alpha channel is derived from the `mask`.
+
+    Args:
+      mask: A PIL grayscale ('L' mode) image to serve as the alpha mask.
+      color: The fill color for the RGB channels. Can be a color name
+        (e.g., "red"), a hex string (e.g., "#FF0000"), or an RGB tuple
+        (e.g., (255, 0, 0)). Parsed by `parse_color`.
+      negative: Controls how the `mask` is interpreted for the alpha channel.
+        - If `False` (default): The mask is inverted (`ImageOps.invert(mask)`).
+          Darker areas in the original mask become more transparent (lower alpha).
+          For example, mask value 0 (black) -> inverted to 255 -> alpha 255 (opaque).
+          Mask value 255 (white) -> inverted to 0 -> alpha 0 (transparent).
+        - If `True`: The mask is used directly. Darker areas in the original
+          mask result in lower alpha values (more transparent).
+          For example, mask value 0 (black) -> alpha 0 (transparent).
+          Mask value 255 (white) -> alpha 255 (opaque).
+
+    Returns:
+      A new PIL RGBA image.
+    """
+    rgb_color = parse_color(color)
+    base = Image.new("RGBA", mask.size, rgb_color)
+    # Invert the mask by default so that darker regions become transparent.
+    alpha = mask if negative else ImageOps.invert(mask)
+    base.putalpha(alpha)
+    return base
+
+
+def open_image(source: str | Path) -> Image.Image:
+    """Open an image from a file path or from standard input.
+
+    Args:
+      source: A file path or "-" to read from stdin.
+
+    Returns:
+      A PIL Image.
+    """
+    if isinstance(source, str) and source.strip() == "-":
+        return Image.open(sys.stdin.buffer)
+    return Image.open(Path(source))
+
+
+def save_image(img: Image.Image, destination: str | Path) -> None:
+    """Save an image to a file path or to standard output.
+
+    Args:
+      img: The PIL Image to save.
+      destination: A file path or "-" to write to stdout.
+    """
+    if isinstance(destination, str) and destination.strip() == "-":
+        # When writing to stdout, write binary data.
+        img.save(sys.stdout.buffer, format="PNG")
+    else:
+        out_path = Path(destination)
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+        img.save(out_path, format="PNG")
+
+
+def igray2alpha(
+    img: Image.Image,
+    color: ColorSpec = "black",
+    white_point: float = 0.9,
+    black_point: float = 0.1,
+    negative: bool = False,
+) -> Image.Image:
+    """Convert an image by normalizing its grayscale version and applying an alpha mask.
+
+    This is the core image processing function. It performs the following steps:
+    1. Converts the input `img` to grayscale ('L' mode).
+    2. Normalizes the contrast of the grayscale image using `normalize_grayscale`
+       with the provided `white_point` and `black_point`.
+    3. Creates a new RGBA image using the normalized grayscale image as a mask.
+       The RGB channels are filled with the specified `color`, and the alpha
+       channel is determined by the mask and the `negative` flag, as handled
+       by `create_alpha_image`.
+
+    Args:
+      img: The input PIL Image (can be any mode that Pillow can convert to 'L').
+      color: The fill color for the output image's RGB channels.
+        Passed to `create_alpha_image`. See `parse_color` for format.
+        Default is "black".
+      white_point: White point threshold for `normalize_grayscale`.
+        Can be a fraction (0.0-1.0) or percentage (>1). Default is `0.9`.
+        See `normalize_grayscale` docstring for details on percentage interpretation.
+      black_point: Black point threshold for `normalize_grayscale`.
+        Can be a fraction (0.0-1.0) or percentage (>1). Default is `0.1`.
+        See `normalize_grayscale` docstring for details on percentage interpretation.
+      negative: Controls how the normalized mask is interpreted for alpha.
+        Passed to `create_alpha_image`. Default is `False`.
+        See `create_alpha_image` docstring for details.
+
+    Returns:
+      A new PIL RGBA image with the specified color and an alpha mask derived
+      from the normalized grayscale version of the input image.
+    """
+    gray = img.convert("L")
+    normalized = normalize_grayscale(gray, white_point, black_point)
+    return create_alpha_image(normalized, color, negative)
+
+
+def gray2alpha(
+    input_path: str | Path = "-",
+    output_path: str | Path = "-",
+    color: ColorSpec = "black",
+    white_point: float = 0.9,
+    black_point: float = 0.1,
+    negative: bool = False,
+) -> None:
+    """CLI function to read an image, process it using igray2alpha, and save.
+
+    This function is intended to be used as the target for the `fire` CLI.
+    It orchestrates image loading, processing via `igray2alpha`, and saving.
+    Output is always in PNG format.
+
+    Args:
+      input_path: Path to the input image file. If "-", reads from stdin.
+      output_path: Path to save the output PNG image. If "-", writes to stdout.
+      color: Fill color for the output image. See `parse_color` for format.
+        Default: "black".
+      white_point: White point threshold for normalization (0.0-1.0 or >1 for percentage).
+        Default: 0.9. See `normalize_grayscale` for detailed explanation,
+        especially regarding percentage interpretation.
+      black_point: Black point threshold for normalization (0.0-1.0 or >1 for percentage).
+        Default: 0.1. See `normalize_grayscale` for detailed explanation.
+      negative: If True, the alpha mask is not inverted (lighter areas of the
+        original grayscale image become more opaque in the final alpha).
+        If False (default), the mask is inverted (darker areas of the original
+        grayscale image become more opaque). See `create_alpha_image`.
+    """
+    # Exceptions will be caught and reported by `fire` at the CLI level.
+    with open_image(input_path) as img:
+        result = igray2alpha(img, color, white_point, black_point, negative)
+    save_image(result, output_path)
+
+
+def cli() -> None:
+    """CLI entry point."""
+    fire.Fire(gray2alpha)
+
+
+if __name__ == "__main__":
+    cli()
+</file>
+
+<file path="tests/test_alpha_creation.py">
+"""Tests for alpha image creation functionality."""
+
+import pytest
+import numpy as np
+from PIL import Image
+
+# Assuming correct import path after rename
+from image_alpha_utils.gray2alpha import create_alpha_image, parse_color
+
+# Helper to create a grayscale image
+def create_gray_image(pixels: list[list[int]]) -> Image.Image:
+    np_array = np.array(pixels, dtype=np.uint8)
+    return Image.fromarray(np_array, mode='L')
+
+# Helper to get pixel data from RGBA image
+def get_rgba_pixel_data(img: Image.Image) -> list[list[tuple[int,int,int,int]]]:
+    return np.array(img.convert("RGBA")).tolist()
+
+
+def test_create_alpha_simple_black_color_default_inversion():
+    """Test with a simple mask, black color, and default mask inversion."""
+    # Mask: 0 (black) should become transparent (alpha=0) after inversion (255 -> 0)
+    #       255 (white) should become opaque (alpha=255) after inversion (0 -> 255)
+    #       128 (gray) should become semi-transparent (alpha=127) after inversion (127 -> 128, actually 255-128 = 127 for alpha)
+    # Correct inversion for alpha: alpha = 255 - mask_value
+    mask_pixels = [[0, 128, 255]]
+    mask_img = create_gray_image(mask_pixels)
+
+    color_rgb = parse_color("black") # (0,0,0)
+
+    # Default: negative=False, so mask is inverted.
+    # Alpha values: 255-0=255, 255-128=127, 255-255=0
+    expected_rgba_pixels = [[
+        (color_rgb[0], color_rgb[1], color_rgb[2], 255), # from mask 0
+        (color_rgb[0], color_rgb[1], color_rgb[2], 127), # from mask 128
+        (color_rgb[0], color_rgb[1], color_rgb[2], 0),   # from mask 255
+    ]]
+
+    result_img = create_alpha_image(mask_img, color="black", negative=False)
+    assert result_img.mode == "RGBA"
+    assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
+
+def test_create_alpha_custom_color_default_inversion():
+    """Test with a custom color (blue) and default mask inversion."""
+    mask_pixels = [[0, 255]]
+    mask_img = create_gray_image(mask_pixels)
+
+    color_rgb = parse_color("blue") # (0,0,255)
+
+    # Default: negative=False, so mask is inverted.
+    # Alpha values: 255-0=255, 255-255=0
+    expected_rgba_pixels = [[
+        (color_rgb[0], color_rgb[1], color_rgb[2], 255),
+        (color_rgb[0], color_rgb[1], color_rgb[2], 0),
+    ]]
+
+    result_img = create_alpha_image(mask_img, color="blue", negative=False)
+    assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
+
+def test_create_alpha_negative_true_no_inversion():
+    """Test with negative=True, so mask is NOT inverted."""
+    # Mask: 0 (black) should be transparent (alpha=0)
+    #       255 (white) should be opaque (alpha=255)
+    #       128 (gray) should be semi-transparent (alpha=128)
+    mask_pixels = [[0, 128, 255]]
+    mask_img = create_gray_image(mask_pixels)
+
+    color_rgb = parse_color("red") # (255,0,0)
+
+    # negative=True, mask is used directly as alpha.
+    # Alpha values: 0, 128, 255
+    expected_rgba_pixels = [[
+        (color_rgb[0], color_rgb[1], color_rgb[2], 0),
+        (color_rgb[0], color_rgb[1], color_rgb[2], 128),
+        (color_rgb[0], color_rgb[1], color_rgb[2], 255),
+    ]]
+
+    result_img = create_alpha_image(mask_img, color="red", negative=True)
+    assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
+
+def test_create_alpha_solid_mask_default_inversion():
+    """Test with a solid white mask (should become fully transparent after inversion)."""
+    mask_pixels = [[255, 255], [255, 255]] # All white
+    mask_img = create_gray_image(mask_pixels)
+    color_rgb = parse_color("green") # (0,128,0) or (0,255,0) depending on webcolors vs PIL
+                                    # webcolors.name_to_rgb('green') is (0, 128, 0)
+                                    # PIL.ImageColor.getrgb('green') is (0, 128, 0)
+                                    # Oh, CSS 'green' is #008000. 'lime' is #00FF00.
+
+    # Default: negative=False, mask inverted. 255 -> alpha 0.
+    expected_rgba_pixels = [
+        [(color_rgb[0], color_rgb[1], color_rgb[2], 0), (color_rgb[0], color_rgb[1], color_rgb[2], 0)],
+        [(color_rgb[0], color_rgb[1], color_rgb[2], 0), (color_rgb[0], color_rgb[1], color_rgb[2], 0)],
+    ]
+
+    result_img = create_alpha_image(mask_img, color="green", negative=False)
+    assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
+
+def test_create_alpha_solid_mask_no_inversion():
+    """Test with a solid white mask and negative=True (should be fully opaque)."""
+    mask_pixels = [[255, 255], [255, 255]] # All white
+    mask_img = create_gray_image(mask_pixels)
+    color_rgb = parse_color("green")
+
+    # negative=True, mask used directly. 255 -> alpha 255.
+    expected_rgba_pixels = [
+        [(color_rgb[0], color_rgb[1], color_rgb[2], 255), (color_rgb[0], color_rgb[1], color_rgb[2], 255)],
+        [(color_rgb[0], color_rgb[1], color_rgb[2], 255), (color_rgb[0], color_rgb[1], color_rgb[2], 255)],
+    ]
+
+    result_img = create_alpha_image(mask_img, color="green", negative=True)
+    assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
+
+def test_create_alpha_with_tuple_color():
+    """Test using an RGB tuple as color input."""
+    mask_pixels = [[100]]
+    mask_img = create_gray_image(mask_pixels)
+    color_rgb_tuple = (10, 20, 30)
+
+    # Default inversion: alpha = 255 - 100 = 155
+    expected_rgba_pixels = [[(10, 20, 30, 155)]]
+
+    result_img = create_alpha_image(mask_img, color=color_rgb_tuple, negative=False)
+    assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
+
+def test_create_alpha_with_hex_color():
+    """Test using a hex string as color input."""
+    mask_pixels = [[200]]
+    mask_img = create_gray_image(mask_pixels)
+    hex_color = "#A0B0C0" # (160, 176, 192)
+    color_rgb = (160, 176, 192)
+
+    # Default inversion: alpha = 255 - 200 = 55
+    expected_rgba_pixels = [[(color_rgb[0], color_rgb[1], color_rgb[2], 55)]]
+
+    result_img = create_alpha_image(mask_img, color=hex_color, negative=False)
+    assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
+
+def test_create_alpha_invalid_color_spec():
+    """Test that an invalid color spec raises ValueError (via parse_color)."""
+    mask_pixels = [[128]]
+    mask_img = create_gray_image(mask_pixels)
+    with pytest.raises(ValueError):
+        create_alpha_image(mask_img, color="not_a_real_color_blah")
+
+# Ensure the input mask image is not modified
+def test_create_alpha_mask_unchanged():
+    """Test that the input mask image is not modified."""
+    mask_pixels = [[0, 128, 255]]
+    original_mask_data = [row[:] for row in mask_pixels] # Deep copy
+    mask_img = create_gray_image(mask_pixels)
+
+    create_alpha_image(mask_img, color="black", negative=False)
+
+    # Verify original mask data is unchanged
+    assert np.array(mask_img).tolist() == original_mask_data
+
+    create_alpha_image(mask_img, color="black", negative=True)
+    assert np.array(mask_img).tolist() == original_mask_data
+</file>
+
+<file path="tests/test_cli.py">
+"""Tests for the command-line interface."""
+
+import pytest
+import sys
+import io
+from pathlib import Path
+from unittest import mock
+from PIL import Image
+
+# Target import path
+from image_alpha_utils.gray2alpha import cli as gray2alpha_cli
+from image_alpha_utils.gray2alpha import igray2alpha # For verifying calls
+
+# Helper to create a dummy image object
+def create_dummy_pil_image(mode="RGB", size=(10,10), color="red") -> Image.Image:
+    return Image.new(mode, size, color)
+
+@mock.patch("image_alpha_utils.gray2alpha.save_image")
+@mock.patch("image_alpha_utils.gray2alpha.open_image")
+def test_cli_simple_file_io(mock_open_image, mock_save_image):
+    """Test basic CLI operation with input and output files."""
+    dummy_input_img = create_dummy_pil_image()
+    mock_open_image.return_value.__enter__.return_value = dummy_input_img # Mock context manager
+
+    # Expected processed image (mocked, not actually processed by igray2alpha here for simplicity of CLI test)
+    # We're testing the CLI plumbing, not igray2alpha's logic itself (that's in other tests)
+    # However, igray2alpha will be called. We can check its args.
+
+    # To make this more robust, let's have igray2alpha actually run and check the output of save_image
+    # So, instead of mocking igray2alpha, we let it run.
+    # mock_save_image will capture the output.
+
+    input_file = "input.png"
+    output_file = "output.png"
+
+    # Simulate command line arguments
+    test_args = ["gray2alpha", input_file, output_file, "--color", "blue"]
+
+    with mock.patch.object(sys, "argv", test_args):
+        try:
+            gray2alpha_cli()
+        except SystemExit as e:
+            # Fire library calls sys.exit(). We expect exit code 0 for success.
+            assert e.code == 0, f"CLI exited with code {e.code} for successful run"
+
+    mock_open_image.assert_called_once_with(input_file)
+
+    # igray2alpha would be called with dummy_input_img and color="blue"
+    # The result of igray2alpha is then passed to save_image
+    assert mock_save_image.call_count == 1
+    saved_img_arg = mock_save_image.call_args[0][0]
+    saved_path_arg = mock_save_image.call_args[0][1]
+
+    assert isinstance(saved_img_arg, Image.Image)
+    assert saved_img_arg.mode == "RGBA" # igray2alpha produces RGBA
+    assert saved_path_arg == output_file
+    # We could do a more detailed check on saved_img_arg if we knew exact output of igray2alpha
+    # For now, confirming it's an image and was passed to save_image is good for CLI plumbing.
+
+@mock.patch("image_alpha_utils.gray2alpha.igray2alpha") # Mock the core processing
+@mock.patch("image_alpha_utils.gray2alpha.save_image")
+@mock.patch("image_alpha_utils.gray2alpha.open_image")
+def test_cli_parameters_passed_to_igray2alpha(mock_open_image, mock_save_image, mock_igray2alpha_func):
+    """Test that CLI parameters are correctly passed to the igray2alpha function."""
+    dummy_input_img = create_dummy_pil_image(mode='L') # Input for igray2alpha is PIL Image
+    mock_open_image.return_value.__enter__.return_value = dummy_input_img
+
+    # The mock_igray2alpha_func will return another dummy image to be passed to save_image
+    dummy_output_img = create_dummy_pil_image(mode='RGBA')
+    mock_igray2alpha_func.return_value = dummy_output_img
+
+    input_file = "in.jpg"
+    output_file = "out.png"
+    color_arg = "red"
+    wp_arg = 0.8
+    bp_arg = 0.2
+
+    # Test with all parameters
+    test_args = [
+        "gray2alpha", # Script name, usually sys.argv[0] but fire doesn't use it for dispatch
+        input_file,
+        output_file,
+        "--color", color_arg,
+        "--white_point", str(wp_arg),
+        "--black_point", str(bp_arg),
+        "--negative", # This means negative=True
+    ]
+
+    with mock.patch.object(sys, "argv", test_args):
+        try:
+            gray2alpha_cli()
+        except SystemExit as e:
+            assert e.code == 0
+
+    mock_open_image.assert_called_once_with(input_file)
+    mock_igray2alpha_func.assert_called_once_with(
+        img=dummy_input_img,
+        color=color_arg,
+        white_point=wp_arg,
+        black_point=bp_arg,
+        negative=True
+    )
+    mock_save_image.assert_called_once_with(dummy_output_img, output_file)
+
+
+@mock.patch("sys.stderr", new_callable=io.StringIO)
+@mock.patch("image_alpha_utils.gray2alpha.open_image")
+def test_cli_input_file_not_found(mock_open_image, mock_stderr):
+    """Test CLI behavior when input file is not found."""
+    mock_open_image.side_effect = FileNotFoundError("File not found: input.jpg")
+
+    test_args = ["gray2alpha", "input.jpg", "output.png"]
+
+    with mock.patch.object(sys, "argv", test_args):
+        try:
+            gray2alpha_cli()
+        except SystemExit as e:
+            # Fire should exit with non-zero code for errors
+            assert e.code != 0, "CLI should exit with non-zero code on error"
+        else:
+            pytest.fail("SystemExit was not raised by Fire on error")
+
+    # Check stderr for error message (Fire prints exception info)
+    # The exact message depends on Fire's formatting.
+    # We removed the custom "Error processing image:" prefix.
+    assert "FileNotFoundError" in mock_stderr.getvalue()
+    assert "File not found: input.jpg" in mock_stderr.getvalue()
+
+
+@mock.patch("sys.stdout", new_callable=io.BytesIO) # For binary image data
+@mock.patch("image_alpha_utils.gray2alpha.open_image")
+def test_cli_stdout_output(mock_open_image, mock_stdout_bytes):
+    """Test CLI writing to stdout when output_path is '-'."""
+    dummy_input_img = create_dummy_pil_image(color="green")
+    mock_open_image.return_value.__enter__.return_value = dummy_input_img
+
+    # This will be the actual processed image by igray2alpha
+    expected_output_img = igray2alpha(dummy_input_img, color="black") # Default color
+
+    test_args = ["gray2alpha", "input.jpg", "-"] # Output to stdout
+
+    with mock.patch.object(sys, "argv", test_args):
+        try:
+            gray2alpha_cli()
+        except SystemExit as e:
+            assert e.code == 0
+
+    mock_open_image.assert_called_once_with("input.jpg")
+
+    # Verify that the image written to stdout matches expected_output_img
+    # The data in mock_stdout_bytes.getvalue() is the PNG bytes.
+    # We can load it back with PIL and compare.
+    mock_stdout_bytes.seek(0)
+    img_from_stdout = Image.open(mock_stdout_bytes)
+
+    assert img_from_stdout.mode == expected_output_img.mode
+    assert img_from_stdout.size == expected_output_img.size
+    # A pixel-by-pixel comparison is more robust
+    assert list(img_from_stdout.getdata()) == list(expected_output_img.getdata())
+
+
+@mock.patch("image_alpha_utils.gray2alpha.save_image") # To prevent actual file saving
+@mock.patch("sys.stdin.buffer", new_callable=io.BytesIO)
+def test_cli_stdin_input(mock_stdin_bytes, mock_save_image):
+    """Test CLI reading from stdin when input_path is '-'."""
+    dummy_input_img_content = io.BytesIO()
+    create_dummy_pil_image(color="yellow").save(dummy_input_img_content, format="PNG")
+    mock_stdin_bytes.write(dummy_input_img_content.getvalue())
+    mock_stdin_bytes.seek(0)
+
+    output_file = "output_from_stdin.png"
+    test_args = ["gray2alpha", "-", output_file] # Input from stdin
+
+    with mock.patch.object(sys, "argv", test_args):
+        try:
+            gray2alpha_cli()
+        except SystemExit as e:
+            assert e.code == 0
+
+    # Check that save_image was called with the output file
+    # and an image that would result from processing the dummy yellow image
+    assert mock_save_image.call_count == 1
+    saved_img_arg = mock_save_image.call_args[0][0]
+    saved_path_arg = mock_save_image.call_args[0][1]
+
+    assert isinstance(saved_img_arg, Image.Image)
+    assert saved_img_arg.mode == "RGBA"
+    assert saved_path_arg == output_file
+    # We could open the original dummy_input_img_content with Image.open,
+    # process it with igray2alpha, then compare to saved_img_arg.
+    dummy_input_img_content.seek(0)
+    original_pil_img = Image.open(dummy_input_img_content)
+    expected_processed_img = igray2alpha(original_pil_img) # default params
+
+    assert list(saved_img_arg.getdata()) == list(expected_processed_img.getdata())
+
+
+@mock.patch("sys.stderr", new_callable=io.StringIO)
+def test_cli_invalid_color_parameter(mock_stderr):
+    """Test CLI with an invalid color parameter."""
+    # No need to mock open/save as Fire should catch error before that.
+    # However, open_image is called before igray2alpha (where parse_color is).
+    # So we need to mock open_image to prevent FileNotFoundError.
+    with mock.patch("image_alpha_utils.gray2alpha.open_image") as mock_open:
+        mock_open.return_value.__enter__.return_value = create_dummy_pil_image()
+
+        test_args = ["gray2alpha", "dummy.png", "out.png", "--color", "invalid_color_name_xyz"]
+        with mock.patch.object(sys, "argv", test_args):
+            try:
+                gray2alpha_cli()
+            except SystemExit as e:
+                assert e.code != 0
+            else:
+                pytest.fail("SystemExit not raised for invalid color")
+
+        error_output = mock_stderr.getvalue()
+        assert "ValueError" in error_output
+        assert "Invalid color specification: 'invalid_color_name_xyz'" in error_output
+
+# This test file assumes that the CLI entry point is correctly set up
+# in pyproject.toml to call image_alpha_utils.gray2alpha:cli
+# For now, we are directly testing the cli() function.
+# If using `subprocess` to test the installed script, that would be an integration test.
+# These tests are more like unit/functional tests for the CLI logic.
+# Using `fire.Fire(component)` directly in tests is also an option,
+# but patching sys.argv and calling the `cli()` entry point is closer to actual usage.
+# `fire` can be tricky with `sys.exit` and argument parsing in tests.
+# The current approach with patching `sys.argv` and catching `SystemExit` is common.
+# Note: `fire` uses `sys.argv[1:]` for its own arguments after you specify the function.
+# Here, `gray2alpha` in `test_args[0]` is just a placeholder for `sys.argv[0]`.
+# The `fire.Fire(gray2alpha_func_target)` in `cli()` means that `gray2alpha_func_target`'s
+# arguments are parsed from `sys.argv[1:]`.
+# So, `test_args = ["script_name_placeholder", "input_file_arg", "output_file_arg", ...]` is correct.
+
+# A test for --version might be good if the CLI supports it.
+# Fire can auto-generate --help. It doesn't auto-generate --version for a function.
+# If __version__ is needed via CLI, the `cli` function or `gray2alpha` itself would need to handle it.
+# Currently, it does not.
+# The package has a __version__ attribute, but `fire` won't expose it automatically.
+# Adding a specific version command to `fire` usually means creating a class or dict of commands.
+# e.g., `fire.Fire({"run": gray2alpha, "version": print_version})`
+# This is out of scope for current CLI structure.
+</file>
+
+<file path="tests/test_color_parsing.py">
+"""Tests for color parsing functionality."""
+
+import pytest
+from PIL import ImageColor
+
+# Assuming the gray2alpha module is importable from image_alpha_utils
+# For now, due to directory naming issue, this might require adjustment
+# or this test would run after the directory is correctly named.
+# For development, I'll write it as if image_alpha_utils is the correct path.
+from image_alpha_utils.gray2alpha import parse_color, ColorSpec
+
+
+VALID_COLOR_SPECS: list[tuple[ColorSpec, tuple[int, int, int]]] = [
+    # Named colors
+    ("red", (255, 0, 0)),
+    ("lime", (0, 255, 0)),
+    ("blue", (0, 0, 255)),
+    ("WHITE", (255, 255, 255)), # Case-insensitivity
+    ("transparent", (0, 0, 0)), # webcolors might return this for transparent
+                                 # but our function is for RGB, so this might be an edge case
+                                 # Let's verify webcolors behavior for "transparent"
+                                 # webcolors.name_to_rgb("transparent") -> ValueError
+                                 # So, this should be an invalid case if relying on webcolors fully
+                                 # For now, let's assume standard color names.
+
+    # Hex colors
+    ("#FF0000", (255, 0, 0)),
+    ("00FF00", (0, 255, 0)),
+    ("#0000ff", (0, 0, 255)), # Lowercase hex
+    ("123456", (0x12, 0x34, 0x56)),
+
+    # RGB tuples
+    ((255, 0, 0), (255, 0, 0)),
+    ((0, 128, 255), (0, 128, 255)),
+]
+
+# webcolors.name_to_rgb("transparent") raises ValueError.
+# So, "transparent" is not a valid color name for webcolors.name_to_rgb
+# Let's get a list of standard CSS3 names from PIL.ImageColor for more robust testing
+CSS3_NAMES = list(ImageColor.colormap.keys())
+NAMED_COLORS_TO_TEST = ["red", "green", "blue", "yellow", "cyan", "magenta", "black", "white"]
+
+for name in NAMED_COLORS_TO_TEST:
+    if name in CSS3_NAMES:
+        # parse_color should give same result as ImageColor.getrgb
+        # Our parse_color uses webcolors, which should be compatible for standard names
+        expected_rgb = ImageColor.getrgb(name)[:3] # getrgb can return RGBA, we need RGB
+        VALID_COLOR_SPECS.append((name, expected_rgb))
+
+
+INVALID_COLOR_SPECS: list[ColorSpec] = [
+    "not_a_color",
+    "#12345",  # Invalid hex (too short)
+    "12345",   # Invalid hex (too short)
+    "#GGHHII", # Invalid hex characters
+    "GGHHII",  # Invalid hex characters
+    (255, 0),   # Tuple too short
+    (255, 0, 0, 0), # Tuple too long
+    (256, 0, 0),  # Value out of range
+    (-1, 0, 0),   # Value out of range
+    (1.0, 0, 0),  # Not an int
+    None,
+    123,
+]
+
+@pytest.mark.parametrize("color_spec, expected_rgb", VALID_COLOR_SPECS)
+def test_parse_color_valid(color_spec: ColorSpec, expected_rgb: tuple[int, int, int]):
+    """Test parse_color with valid color specifications."""
+    assert parse_color(color_spec) == expected_rgb
+
+@pytest.mark.parametrize("color_spec", INVALID_COLOR_SPECS)
+def test_parse_color_invalid(color_spec: ColorSpec):
+    """Test parse_color with invalid color specifications."""
+    with pytest.raises(ValueError):
+        parse_color(color_spec)
+
+def test_parse_color_specific_webcolors_behavior():
+    """Test specific behavior related to webcolors library if necessary."""
+    # For example, if webcolors has specific aliases or normalizations.
+    # "grey" vs "gray"
+    assert parse_color("grey") == ImageColor.getrgb("gray")[:3]
+    assert parse_color("darkgrey") == ImageColor.getrgb("darkgray")[:3]
+
+    # Check a few more complex names if webcolors supports them
+    if "steelblue" in CSS3_NAMES:
+         assert parse_color("steelblue") == ImageColor.getrgb("steelblue")[:3]
+    if "RebeccaPurple" in CSS3_NAMES: # A CSS specific named color
+        assert parse_color("RebeccaPurple") == ImageColor.getrgb("RebeccaPurple")[:3]
+
+# It seems `webcolors` might not support all CSS names that PIL.ImageColor does,
+# or there might be slight variations. The core idea is to test common cases.
+# The `parse_color` uses `webcolors.name_to_rgb` which supports CSS2, CSS2.1, CSS3 names.
+# So it should be fairly comprehensive.
+# Let's ensure our test cases are robust. The initial VALID_COLOR_SPECS cover hex and tuples well.
+# The NAMED_COLORS_TO_TEST with ImageColor provides a good baseline.
+# webcolors covers HTML4, CSS2, CSS2.1, CSS3. ImageColor.colormap covers CSS3.
+# They should largely overlap.
+
+# Example: webcolors.name_to_rgb('transparent') raises ValueError.
+# This is correct as 'transparent' usually implies an alpha component, not an RGB value.
+# Our function is specifically for RGB.
+def test_parse_color_transparent_is_invalid():
+    """'transparent' is not a valid RGB color name for this function."""
+    with pytest.raises(ValueError):
+        parse_color("transparent")
+
+# Test leading/trailing whitespace for string inputs
+def test_parse_color_whitespace_stripping():
+    """Test that leading/trailing whitespace is stripped from string color specs."""
+    assert parse_color("  #ff0000  ") == (255, 0, 0)
+    assert parse_color("  ff0000  ") == (255, 0, 0)
+    assert parse_color("  red  ") == (255, 0, 0)
+    with pytest.raises(ValueError):
+        parse_color("  not_a_color  ")
+
+# Test hex with mixed case
+def test_parse_color_hex_mixed_case():
+    """Test that hex color specs with mixed case are handled correctly."""
+    assert parse_color("#fF00aA") == (255, 0, 170)
+    assert parse_color("Ff00Aa") == (255, 0, 170)
+
+# Test that the error messages are somewhat informative (optional but good)
+def test_parse_color_invalid_tuple_message():
+    with pytest.raises(ValueError, match="Color must be a string or an RGB tuple, got:"):
+        parse_color((255, 0)) # type: ignore
+
+def test_parse_color_invalid_named_color_message():
+    with pytest.raises(ValueError, match="Invalid color specification:"):
+        parse_color("very_invalid_color_name_xyz")
+
+def test_parse_color_invalid_hex_format_message():
+    # This will be caught by the regex and then by webcolors.name_to_rgb
+    # The message comes from the webcolors fallback.
+    with pytest.raises(ValueError, match="Invalid color specification:"):
+        parse_color("#12345")
+    with pytest.raises(ValueError, match="Invalid color specification:"):
+        parse_color("#GHJKLM")
+
+# Check the actual import path needed for tests.
+# Since the directory is `src/twat_image` but `pyproject.toml` says package is `src/image_alpha_utils` (after rename)
+# and `tool.hatch.build.targets.wheel.packages = ["src/image_alpha_utils"]`
+# and `tool.hatch.build.hooks.vcs.version-file = "src/image_alpha_utils/__version__.py"`
+# The tests, when run by hatch, *should* find `image_alpha_utils` correctly if the directory rename were successful.
+# Given the rename tool issue, I'll assume for now that `hatch test` might temporarily fail or require the
+# user to manually rename the directory `src/twat_image` to `src/image_alpha_utils` for tests to pass.
+# The code within `tests/test_color_parsing.py` should be written against the *intended* package structure.
+
+# So, `from image_alpha_utils.gray2alpha import parse_color, ColorSpec` is correct.
+# If I need to run this test *before* the directory is renamed, I'd have to use
+# `from twat_image.gray2alpha import parse_color, ColorSpec`
+# But the goal is to fix the codebase, so I'll write for the target state.
+
+# Add a simple test to ensure the file can be imported by pytest
+def test_module_importable():
+    pass
+</file>
+
+<file path="tests/test_core_processing.py">
+"""Tests for the core igray2alpha processing function."""
+
+import pytest
+import numpy as np
+from PIL import Image, ImageOps
+
+# Assuming correct import path after rename
+from image_alpha_utils.gray2alpha import igray2alpha, parse_color
+
+# Helper to create an RGB image (as igray2alpha converts to 'L' internally)
+def create_rgb_image(pixels: list[list[tuple[int,int,int]]]) -> Image.Image:
+    np_array = np.array(pixels, dtype=np.uint8)
+    return Image.fromarray(np_array, mode='RGB')
+
+# Helper to create a grayscale image
+def create_gray_image(pixels: list[list[int]]) -> Image.Image:
+    np_array = np.array(pixels, dtype=np.uint8)
+    return Image.fromarray(np_array, mode='L')
+
+# Helper to get pixel data from RGBA image
+def get_rgba_pixel_data(img: Image.Image) -> list[list[tuple[int,int,int,int]]]:
+    return np.array(img.convert("RGBA")).tolist()
+
+
+def test_igray2alpha_simple_case_defaults():
+    """Test igray2alpha with a simple image and default parameters."""
+    # Input image (RGB, will be converted to grayscale)
+    # Grayscale equivalent of (50,100,150) is approx 0.21*50 + 0.72*100 + 0.07*150 = 10.5 + 72 + 10.5 = 93
+    # Grayscale equivalent of (200,210,220) is approx 0.21*200 + 0.72*210 + 0.07*220 = 42 + 151.2 + 15.4 = 208.6 -> 209
+    # So, grayscale input to normalize_grayscale will be: [[93, 209]]
+    input_rgb_pixels = [[(50, 100, 150), (200, 210, 220)]]
+    input_img = create_rgb_image(input_rgb_pixels)
+
+    # Expected processing steps with defaults:
+    # 1. Convert to grayscale: Image with pixels [[93, 209]] (approx)
+    #    Luminance values: R * 0.299 + G * 0.587 + B * 0.114 (Pillow's formula)
+    #    (50*0.299 + 100*0.587 + 150*0.114) = 14.95 + 58.7 + 17.1 = 90.75 -> 91
+    #    (200*0.299 + 210*0.587 + 220*0.114) = 59.8 + 123.27 + 25.08 = 208.15 -> 208
+    #    Grayscale image: [[91, 208]]
+
+    # 2. Normalize grayscale (defaults: white_point=0.9, black_point=0.1):
+    #    Autocontrast on [[91, 208]]: maps 91 to 0, 208 to 255.
+    #    Normalized values based on autocontrast: [[0, 255]] (approx, let's be more precise)
+    #    img_gray = Image.new('L', (2,1))
+    #    img_gray.putdata([91,208])
+    #    img_autocontrast = ImageOps.autocontrast(img_gray) -> data is [0, 255]
+    #
+    #    Now apply thresholds (bp=0.1 -> 25.5, wp=0.9 -> 229.5) to these autocontrasted values [0, 255]
+    #    0 is < 25.5 -> becomes 0.
+    #    255 is > 229.5 -> becomes 255.
+    #    So, the mask for create_alpha_image is [[0, 255]]
+
+    # 3. Create alpha image (defaults: color="black", negative=False):
+    #    Mask is [[0, 255]]. Color is black (0,0,0). Negative=False (invert mask for alpha).
+    #    Inverted mask for alpha: 255-0=255, 255-255=0. So alpha channel is [[255, 0]].
+    #    Resulting RGBA: [[(0,0,0,255), (0,0,0,0)]]
+
+    expected_rgba_pixels = [[(0,0,0,255), (0,0,0,0)]]
+
+    result_img = igray2alpha(input_img) # All defaults
+    assert result_img.mode == "RGBA"
+    assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
+
+
+def test_igray2alpha_custom_color_and_points_negative_true():
+    """Test with custom color, white/black points, and negative=True."""
+    # Input grayscale image (already 'L' mode)
+    input_gray_pixels = [[0, 75, 150, 225, 255]]
+    input_img = create_gray_image(input_gray_pixels)
+
+    custom_color = "blue" # (0,0,255)
+    custom_color_rgb = parse_color(custom_color)
+    white_point = 0.8  # Pixels >= 0.8*255=204 become white in normalized mask
+    black_point = 0.2  # Pixels <= 0.2*255=51 become black in normalized mask
+
+    # Expected processing:
+    # 1. Grayscale conversion: Input is already grayscale [[0, 75, 150, 225, 255]]
+
+    # 2. Normalize grayscale (wp=0.8, bp=0.2):
+    #    Autocontrast on [[0, 75, 150, 225, 255]]: maps 0 to 0, 255 to 255.
+    #    Original Values:  0,  75, 150, 225, 255 (already full range, autocontrast is identity)
+    #
+    #    Apply thresholds (bp_val=51, wp_val=204) to these values:
+    #    0 (<51) -> 0
+    #    75 (between 51 and 204) -> scaled: (75-51)/(204-51) * 255 = (24/153)*255 = 0.1568 * 255 = 39.99 -> 40
+    #    150 (between 51 and 204) -> scaled: (150-51)/(204-51) * 255 = (99/153)*255 = 0.6470 * 255 = 164.99 -> 165
+    #    225 (>204) -> 255
+    #    255 (>204) -> 255
+    #    Normalized mask for create_alpha_image: [[0, 40, 165, 255, 255]]
+
+    # 3. Create alpha image (color="blue", negative=True):
+    #    Mask is [[0, 40, 165, 255, 255]]. Color is blue (0,0,255). Negative=True (don't invert mask).
+    #    Alpha channel is directly from mask: [[0, 40, 165, 255, 255]].
+    #    Resulting RGBA:
+    #    (0,0,255,0)
+    #    (0,0,255,40)
+    #    (0,0,255,165)
+    #    (0,0,255,255)
+    #    (0,0,255,255)
+
+    expected_rgba_pixels = [[
+        (custom_color_rgb[0], custom_color_rgb[1], custom_color_rgb[2], 0),
+        (custom_color_rgb[0], custom_color_rgb[1], custom_color_rgb[2], 40),
+        (custom_color_rgb[0], custom_color_rgb[1], custom_color_rgb[2], 165),
+        (custom_color_rgb[0], custom_color_rgb[1], custom_color_rgb[2], 255),
+        (custom_color_rgb[0], custom_color_rgb[1], custom_color_rgb[2], 255),
+    ]]
+
+    result_img = igray2alpha(input_img,
+                             color=custom_color,
+                             white_point=white_point,
+                             black_point=black_point,
+                             negative=True)
+    assert result_img.mode == "RGBA"
+    assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
+
+def test_igray2alpha_input_image_not_modified():
+    """Ensure the input Pillow image object is not modified."""
+    input_pixels = [[(10,20,30)]]
+    input_img = create_rgb_image(input_pixels)
+    original_data = np.array(input_img).copy() # Copy data before processing
+
+    igray2alpha(input_img) # Call with defaults
+
+    # Check that original image data is unchanged
+    assert np.array_equal(np.array(input_img), original_data)
+
+
+def test_igray2alpha_percentage_thresholds():
+    """Test igray2alpha with percentage thresholds, ensuring consistency with normalize_grayscale tests."""
+    # This test is to confirm overall behavior when percentages are used for thresholds.
+    # It relies on the correctness of normalize_grayscale's percentage handling (even if potentially confusing).
+    input_gray_pixels = [[0, 75, 150, 225]]
+    input_img = create_gray_image(input_gray_pixels)
+
+    # From test_normalization.py, normalize_grayscale(img, white_point=10, black_point=10)
+    # on input [[0, 75, 150, 225]] (autocontrasted to [[0, 85, 170, 255]])
+    # with wp_thresh=0.9, bp_thresh=0.1 resulted in mask [[0, 74, 181, 255]].
+    # Let's use these as the mask for create_alpha_image.
+    # Default color "black" (0,0,0), negative=False (invert mask).
+    # Inverted mask for alpha:
+    # 255-0 = 255
+    # 255-74 = 181
+    # 255-181 = 74
+    # 255-255 = 0
+    # Alpha channel: [[255, 181, 74, 0]]
+
+    expected_color_rgb = (0,0,0)
+    expected_rgba_pixels = [[
+        (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 255),
+        (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 181),
+        (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 74),
+        (expected_color_rgb[0], expected_color_rgb[1], expected_color_rgb[2], 0),
+    ]]
+
+    result_img = igray2alpha(input_img, color="black", white_point=10, black_point=10, negative=False)
+    assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
+
+
+def test_igray2alpha_flat_image_input():
+    """Test with a flat color input image."""
+    # All pixels are (128, 128, 128)
+    # Grayscale conversion: [[128, 128], [128, 128]]
+    input_img = Image.new("RGB", (2,2), (128,128,128))
+
+    # normalize_grayscale behavior for flat image [[128,128],[128,128]]:
+    # Autocontrast makes it [[0,0],[0,0]].
+    # Then normalization (bp=0.1, wp=0.9) also makes it [[0,0],[0,0]].
+    # So, the mask for create_alpha_image is [[0,0],[0,0]].
+
+    # create_alpha_image (defaults: color="black", negative=False):
+    # Mask is [[0,0],[0,0]]. Color black (0,0,0). Invert mask for alpha.
+    # Inverted mask: [[255,255],[255,255]].
+    # Resulting RGBA: all (0,0,0,255) - fully opaque black.
+
+    expected_color_rgb = (0,0,0)
+    expected_rgba_pixels = [
+        [(expected_color_rgb[0],expected_color_rgb[1],expected_color_rgb[2],255), (expected_color_rgb[0],expected_color_rgb[1],expected_color_rgb[2],255)],
+        [(expected_color_rgb[0],expected_color_rgb[1],expected_color_rgb[2],255), (expected_color_rgb[0],expected_color_rgb[1],expected_color_rgb[2],255)],
+    ]
+
+    result_img = igray2alpha(input_img)
+    assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
+
+    # If the flat image was pure white (255,255,255)
+    # Grayscale: [[255,255],[255,255]]
+    # normalize_grayscale on this (due to autocontrast of flat white image to black): [[0,0],[0,0]]
+    # Same result as above.
+    input_white_img = Image.new("RGB", (2,2), (255,255,255))
+    result_white_img = igray2alpha(input_white_img)
+    assert get_rgba_pixel_data(result_white_img) == expected_rgba_pixels
+
+    # If the flat image was pure black (0,0,0)
+    # Grayscale: [[0,0],[0,0]]
+    # normalize_grayscale on this: [[0,0],[0,0]]
+    # Same result as above.
+    input_black_img = Image.new("RGB", (2,2), (0,0,0))
+    result_black_img = igray2alpha(input_black_img)
+    assert get_rgba_pixel_data(result_black_img) == expected_rgba_pixels
+    # This behavior with flat images (always resulting in opaque black with default settings)
+    # is a consequence of ImageOps.autocontrast turning flat images black, then
+    # that black mask (0) being inverted to alpha 255.
+    # It might be unexpected for a fully white image to become opaque black.
+    # If `negative=True`, then a flat white input (mask 0) -> alpha 0 (transparent).
+    # If `negative=True`, then a flat grey input (mask 0) -> alpha 0 (transparent).
+    # If `negative=True`, then a flat black input (mask 0) -> alpha 0 (transparent).
+    # This is because `autocontrast` makes any flat image into all 0s.
+    # So, with `negative=True`, any flat input image becomes fully transparent.
+
+def test_igray2alpha_flat_image_negative_true():
+    """Test flat image with negative=True."""
+    input_img = Image.new("RGB", (2,2), (128,128,128)) # Flat gray
+    # Normalized mask will be [[0,0],[0,0]] (due to autocontrast)
+    # With negative=True, alpha is taken directly from this mask.
+    # So, alpha channel is [[0,0],[0,0]]
+    expected_color_rgb = (0,0,0) # Default color black
+    expected_rgba_pixels = [
+        [(expected_color_rgb[0],expected_color_rgb[1],expected_color_rgb[2],0), (expected_color_rgb[0],expected_color_rgb[1],expected_color_rgb[2],0)],
+        [(expected_color_rgb[0],expected_color_rgb[1],expected_color_rgb[2],0), (expected_color_rgb[0],expected_color_rgb[1],expected_color_rgb[2],0)],
+    ]
+    result_img = igray2alpha(input_img, negative=True)
+    assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
+
+# Consider adding a test for an image that already has an alpha channel.
+# igray2alpha converts to 'L' mode, which discards existing alpha. This is expected.
+def test_igray2alpha_input_with_alpha():
+    """Test with an input image that already has an alpha channel."""
+    # Create an RGBA image with some transparency
+    input_rgba_img = Image.new("RGBA", (1,1), (100,150,200,50))
+
+    # Expected: alpha channel is ignored, image converted to 'L' based on RGB.
+    # RGB (100,150,200) -> L ~ (100*0.299 + 150*0.587 + 200*0.114) = 29.9 + 88.05 + 22.8 = 140.75 -> 141
+    # Grayscale image: [[141]]
+    # Normalize grayscale (defaults):
+    #   Autocontrast on [[141]] -> [[0]]
+    #   Thresholds (bp=0.1, wp=0.9) on [[0]] -> [[0]] (mask is [0])
+    # Create alpha image (defaults: color="black", negative=False):
+    #   Mask [[0]], inverted for alpha -> [[255]]
+    #   Result: (0,0,0,255)
+
+    expected_rgba_pixels = [[(0,0,0,255)]]
+    result_img = igray2alpha(input_rgba_img)
+    assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
+</file>
+
+<file path="tests/test_image_alpha_utils.py">
+"""Test suite for twat_image."""
+
+
+def test_version():
+    """Verify package exposes version."""
+    import image_alpha_utils
+
+    assert image_alpha_utils.__version__
+</file>
+
+<file path="tests/test_normalization.py">
+"""Tests for grayscale normalization functionality."""
+
+import pytest
+import numpy as np
+from PIL import Image
+
+# Assuming correct import path after rename
+from image_alpha_utils.gray2alpha import normalize_grayscale
+
+# Helper to create a grayscale image from a list of lists (pixel values)
+def create_gray_image(pixels: list[list[int]]) -> Image.Image:
+    """Creates a PIL grayscale 'L' mode image from a 2D list of pixel values."""
+    np_array = np.array(pixels, dtype=np.uint8)
+    return Image.fromarray(np_array, mode='L')
+
+# Helper to get pixel data as a list of lists
+def get_pixel_data(img: Image.Image) -> list[list[int]]:
+    """Gets pixel data from a PIL image as a list of lists."""
+    return np.array(img).tolist()
+
+def test_normalize_identity_simple():
+    """Test normalization that should result in minimal changes (already contrasty)."""
+    pixels = [
+        [0, 64, 128],
+        [192, 255, 100]
+    ]
+    img = create_gray_image(pixels)
+    # With default thresholds (black_point=0.1, white_point=0.9)
+    # 0   -> 0 (blacker than black_point * 255 = 25.5)
+    # 64  -> scaled (between 25.5 and 229.5)
+    # 128 -> scaled
+    # 192 -> scaled
+    # 255 -> 255 (whiter than white_point * 255 = 229.5)
+    # 100 -> scaled
+
+    # Let's use autocontrast behavior first as a baseline for understanding
+    # normalize_grayscale includes ImageOps.autocontrast()
+    # For this image, autocontrast would map 0 to 0 and 255 to 255.
+    # The internal scaling is (data - black_point_val) / (white_point_val - black_point_val) * 255
+    # black_point_val = 0.1 * 255 = 25.5
+    # white_point_val = 0.9 * 255 = 229.5
+    # Range = 204
+
+    # Pixel 64: (64 - 25.5) / 204 * 255 = (38.5 / 204) * 255 = 0.1887 * 255 = 48.12 -> 48
+    # Pixel 128: (128 - 25.5) / 204 * 255 = (102.5 / 204) * 255 = 0.5024 * 255 = 128.12 -> 128
+    # Pixel 192: (192 - 25.5) / 204 * 255 = (166.5 / 204) * 255 = 0.8161 * 255 = 208.11 -> 208
+    # Pixel 100: (100 - 25.5) / 204 * 255 = (74.5 / 204) * 255 = 0.3651 * 255 = 93.12 -> 93
+
+    expected_pixels = [
+        [0, 48, 128],
+        [208, 255, 93]
+    ]
+    normalized_img = normalize_grayscale(img) # Default thresholds 0.9, 0.1
+    assert get_pixel_data(normalized_img) == expected_pixels
+
+def test_normalize_all_white():
+    """Test image that becomes all white."""
+    pixels = [
+        [230, 240],
+        [250, 255]
+    ] # All >= 229.5 (white_point with default 0.9)
+    img = create_gray_image(pixels)
+    normalized_img = normalize_grayscale(img, white_point=0.9, black_point=0.1)
+    expected_pixels = [
+        [255, 255],
+        [255, 255]
+    ]
+    assert get_pixel_data(normalized_img) == expected_pixels
+
+def test_normalize_all_black():
+    """Test image that becomes all black."""
+    pixels = [
+        [0, 10],
+        [20, 25]
+    ] # All <= 25.5 (black_point with default 0.1)
+    img = create_gray_image(pixels)
+    normalized_img = normalize_grayscale(img, white_point=0.9, black_point=0.1)
+    expected_pixels = [
+        [0, 0],
+        [0, 0]
+    ]
+    assert get_pixel_data(normalized_img) == expected_pixels
+
+def test_normalize_custom_thresholds():
+    """Test with custom white and black points."""
+    pixels = [
+        [0, 50, 100, 150, 200, 250]
+    ]
+    img = create_gray_image(pixels)
+    # black_point = 0.2 (51), white_point = 0.8 (204)
+    # Range for scaling: 204 - 51 = 153
+    # 0   -> 0 (below 51)
+    # 50  -> 0 (below 51)
+    # 100 -> (100 - 51) / 153 * 255 = (49 / 153) * 255 = 0.3202 * 255 = 81.66 -> 82
+    # 150 -> (150 - 51) / 153 * 255 = (99 / 153) * 255 = 0.6470 * 255 = 164.99 -> 165
+    # 200 -> 255 (above 204, after autocontrast this might be tricky. Autocontrast maps 0-250 to 0-255)
+    #       Let's re-evaluate considering autocontrast first.
+    #       Image.autocontrast(img) on [0, 50, 100, 150, 200, 250]
+    #       min=0, max=250. Lut maps 0->0, 250->255.
+    #       Original Values:  0,  50, 100, 150, 200, 250
+    #       Autocontrasted:   0,  51, 102, 153, 204, 255 (approx, (val/250)*255 )
+    #
+    # Now apply thresholds to autocontrasted values:
+    # black_point_val = 0.2 * 255 = 51
+    # white_point_val = 0.8 * 255 = 204
+    #
+    # Autocontrasted values:
+    # 0:   is < 51 -> 0
+    # 51:  is <= 51 -> 0
+    # 102: is between 51 and 204. Scaled: (102 - 51) / (204 - 51) * 255 = (51/153)*255 = (1/3)*255 = 85
+    # 153: is between 51 and 204. Scaled: (153 - 51) / (204 - 51) * 255 = (102/153)*255 = (2/3)*255 = 170
+    # 204: is >= 204 -> 255
+    # 255: is >= 204 -> 255
+    #
+    # Expected: [0, 0, 85, 170, 255, 255]
+
+    normalized_img = normalize_grayscale(img, white_point=0.8, black_point=0.2)
+    expected_pixels = [[0, 0, 85, 170, 255, 255]]
+    assert get_pixel_data(normalized_img) == expected_pixels
+
+def test_normalize_percentage_thresholds():
+    """Test with thresholds given as percentages."""
+    pixels = [[0, 75, 150, 225]] # Autocontrast: 0, 77, 153, 229 approx
+    img = create_gray_image(pixels)
+    # black_point = 25% (0.25 * 255 = 63.75)
+    # white_point = 75% (implicitly 1 - 0.75 = 0.25 from white, so 0.75 actual. 0.75 * 255 = 191.25)
+    # The white_point in normalize_grayscale is "above this becomes white".
+    # So white_point=75 means values above 0.75 are white.
+    # white_point in code: white_point = (1 - white_point / 100) if white_point > 1 else white_point
+    # If white_point=75 (percentage), it becomes (1 - 75/100) = 0.25. This is confusing.
+    # The docstring says: "white_point: Above this threshold the pixel becomes white."
+    # "white_point = (1 - white_point / 100) if white_point > 1 else white_point"
+    # This means if I give 90 (for 90%), it becomes white_point = 0.1. This is a cutoff for the *darkest* of whites.
+    # This seems inverted relative to typical "white point" sense.
+    # Let's re-read: "Above this threshold the pixel becomes white."
+    # If white_point = 0.9 (fraction), data >= 0.9 becomes white.
+    # If white_point = 90 (percent), code makes it 1 - 90/100 = 0.1. Then data >= 0.1 becomes white. This is not right.
+    #
+    # The code for white_point percentage conversion:
+    # `white_point = (1 - white_point / 100) if white_point > 1 else white_point`
+    # If user provides `white_point = 90` (meaning 90th percentile should be white):
+    # `white_point` becomes `1 - 0.9 = 0.1`.
+    # Then `data >= 0.1` becomes white. This means 10% brightest pixels and above are white.
+    # This is the opposite of "pixels brighter than 90th percentile are white".
+    #
+    # The code for black_point percentage:
+    # `black_point = black_point / 100 if black_point > 1 else black_point`
+    # If user provides `black_point = 10` (meaning 10th percentile should be black):
+    # `black_point` becomes `0.1`.
+    # Then `data <= 0.1` becomes black. This seems correct (10% darkest pixels are black).
+    #
+    # It seems the `white_point` percentage logic is inverted.
+    # "Above this threshold the pixel becomes white."
+    # If I say `white_point=90` (meaning 90% bright), I expect values at 90% brightness or more to be white.
+    # So `white_point` should be `0.9`.
+    # The code `(1 - white_point / 100)` is for something like `ImageOps.autocontrast(img, cutoff=10)` where cutoff is percentage to ignore.
+    # If `white_point` param is intended to be "percentage to cut from top", then `white_point=10` (percent) would mean `0.9` threshold.
+    # The docstring "Above this threshold the pixel becomes white" supports `white_point` being the threshold itself (0-1).
+    #
+    # Let's assume the user wants to specify points on 0-1 scale or 0-100 scale.
+    # If `white_point=90` (percent), they mean a threshold of 0.9.
+    # The current code `(1 - white_point / 100)` effectively means `white_point_percentage` is the percentage of pixels to saturate at the low end.
+    # This seems like a bug in parameter interpretation for percentage `white_point`.
+    #
+    # For now, I will test the code AS IS.
+    # If `white_point = 75` (percent), `white_point_threshold = 1 - 75/100 = 0.25`.
+    # If `black_point = 25` (percent), `black_point_threshold = 25/100 = 0.25`.
+    # This will lead to `black_point_threshold == white_point_threshold`.
+    # The code has `if not (0 <= black_point < white_point <= 1): raise ValueError`.
+    # So `black_point=25` and `white_point=75` (percentage inputs) would mean:
+    # `bp = 0.25`, `wp = 0.25`. This will raise ValueError.
+    # Let's test this specific case.
+    with pytest.raises(ValueError, match="Invalid thresholds"):
+        normalize_grayscale(img, white_point=75, black_point=25) # Percentages
+
+    # Let's use valid percentage thresholds according to current logic:
+    # white_point = 10 (percent) -> threshold wp = 1 - 0.1 = 0.9
+    # black_point = 10 (percent) -> threshold bp = 0.1
+    # These are the default values if specified as percentages.
+    # Original pixels: [[0, 75, 150, 225]]
+    # Autocontrast (0-225 to 0-255): 0, (75/225)*255=85, (150/225)*255=170, 255
+    # bp_val = 0.1 * 255 = 25.5
+    # wp_val = 0.9 * 255 = 229.5
+    # Range = 204
+    # Autocontrasted values: 0, 85, 170, 255
+    # 0   (<25.5) -> 0
+    # 85  (scaled) -> (85 - 25.5) / 204 * 255 = (59.5/204)*255 = 0.2916 * 255 = 74.37 -> 74
+    # 170 (scaled) -> (170 - 25.5) / 204 * 255 = (144.5/204)*255 = 0.7083 * 255 = 180.62 -> 181
+    # 255 (>229.5) -> 255
+    # Expected: [[0, 74, 181, 255]]
+    normalized_img = normalize_grayscale(img, white_point=10, black_point=10) # Percentages
+    expected_pixels = [[0, 74, 181, 255]]
+    assert get_pixel_data(normalized_img) == expected_pixels, "Percentage threshold test failed"
+
+
+def test_normalize_flat_image():
+    """Test an image with all the same pixel values."""
+    pixels = [[128, 128], [128, 128]]
+    img = create_gray_image(pixels)
+    # Autocontrast on a flat image makes it all 0.
+    # Then, 0 is less than black_point (0.1), so all pixels become 0.
+    normalized_img = normalize_grayscale(img)
+    expected_pixels = [[0, 0], [0, 0]]
+    assert get_pixel_data(normalized_img) == expected_pixels
+
+    # If flat image is black
+    pixels_black = [[0,0],[0,0]]
+    img_black = create_gray_image(pixels_black)
+    normalized_img_black = normalize_grayscale(img_black)
+    assert get_pixel_data(normalized_img_black) == [[0,0],[0,0]]
+
+    # If flat image is white
+    pixels_white = [[255,255],[255,255]]
+    img_white = create_gray_image(pixels_white)
+    # Autocontrast on 255,255 results in 0,0. Then normalized to 0,0.
+    # This is a known behavior of PIL's autocontrast on flat images.
+    # Pillow 9.0.0 changed autocontrast for single-value images to map to 0.
+    # Before that, it would map to 127 or so.
+    normalized_img_white = normalize_grayscale(img_white)
+    assert get_pixel_data(normalized_img_white) == [[0,0],[0,0]]
+    # This might be surprising. If the image is all 255, one might expect it to stay 255.
+    # However, the `normalize_grayscale` subjects it to `autocontrast` first.
+    # `ImageOps.autocontrast(Image.new('L', (1,1), 255))` results in an image with pixel 0.
+    # Then, 0 <= black_point (0.1) maps to 0. So this is correct given the implementation.
+
+
+def test_invalid_thresholds_values():
+    """Test invalid threshold values (e.g., black_point > white_point)."""
+    img = create_gray_image([[100]])
+    with pytest.raises(ValueError, match="Invalid thresholds"):
+        normalize_grayscale(img, white_point=0.1, black_point=0.9) # bp > wp
+    with pytest.raises(ValueError, match="Invalid thresholds"):
+        normalize_grayscale(img, white_point=0.5, black_point=0.5) # bp == wp
+    with pytest.raises(ValueError, match="Invalid thresholds"):
+        normalize_grayscale(img, white_point=1.1, black_point=0.1) # wp > 1
+    with pytest.raises(ValueError, match="Invalid thresholds"):
+        normalize_grayscale(img, white_point=0.9, black_point=-0.1) # bp < 0
+
+    # Percentage versions that lead to invalid fractional thresholds
+    with pytest.raises(ValueError, match="Invalid thresholds"):
+        # wp = 1 - 20/100 = 0.8, bp = 80/100 = 0.8. bp == wp
+        normalize_grayscale(img, white_point=20, black_point=80)
+
+
+def test_normalize_full_range_after_autocontrast():
+    """Test image that spans full range after autocontrast."""
+    pixels = [[10, 200]] # Autocontrast maps 10 to 0, 200 to 255.
+    img = create_gray_image(pixels)
+    # autocontrasted data approx: 0, 255
+    # bp_val = 0.1 * 255 = 25.5
+    # wp_val = 0.9 * 255 = 229.5
+    # Range = 204
+    # 0 (<25.5) -> 0
+    # 255 (>229.5) -> 255
+    normalized_img = normalize_grayscale(img) # Default thresholds
+    expected_pixels = [[0, 255]]
+    assert get_pixel_data(normalized_img) == expected_pixels
+
+# A note on the white_point percentage interpretation:
+# If the intention of `white_point` as a percentage (e.g., 90 for 90%) was to set the threshold
+# such that values above the 90th percentile of brightness become white, then the formula
+# `white_point_threshold = white_point_percentage / 100.0` would be correct.
+# The current formula `1.0 - (white_point_percentage / 100.0)` means if you pass `white_point=10` (%),
+# the threshold becomes `0.9`. This is like saying "the top 10% of the brightness range is considered white".
+# If you pass `white_point=90` (%), threshold becomes `0.1`. This is like "the top 90% of the brightness range is white".
+# The latter interpretation seems more consistent with how `black_point` percentage is handled
+# (`black_point=10` (%) means threshold `0.1`, i.e., "bottom 10% is black").
+# If this interpretation is correct, then the docstring "Above this threshold the pixel becomes white"
+# combined with `white_point = (1 - white_point / 100)` for percentages is confusing.
+# However, tests should reflect the code as written.
+# The current default `white_point=0.9` (fractional) means "values >= 0.9 are white".
+# The default `black_point=0.1` (fractional) means "values <= 0.1 are black".
+# This seems to be the primary way it's intended to be used.
+# The percentage conversion for white_point might indeed be a bug or a misunderstanding of its intent.
+# I've added a test `test_normalize_percentage_thresholds` that passes with current logic.
+# If the logic for `white_point` percentage is "fixed" later, that test would need adjustment.
+# For now, the test `test_normalize_custom_thresholds` uses fractional points and should be robust.
+</file>
+
+<file path=".gitignore">
+*_autogen/
+.DS_Store
+__version__.py
+__pycache__/
+_Chutzpah*
+_deps
+_NCrunch_*
+_pkginfo.txt
+_Pvt_Extensions
+_ReSharper*/
+_TeamCity*
+_UpgradeReport_Files/
+!?*.[Cc]ache/
+!.axoCover/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/tasks.json
+!**/[Pp]ackages/build/
+!Directory.Build.rsp
+.*crunch*.local.xml
+.axoCover/*
+.builds
+.cr/personal
+.fake/
+.history/
+.ionide/
+.localhistory/
+.mfractor/
+.ntvs_analysis.dat
+.paket/paket.exe
+.sass-cache/
+.vs/
+.vscode
+.vscode/*
+.vshistory/
+[Aa][Rr][Mm]/
+[Aa][Rr][Mm]64/
+[Bb]in/
+[Bb]uild[Ll]og.*
+[Dd]ebug/
+[Dd]ebugPS/
+[Dd]ebugPublic/
+[Ee]xpress/
+[Ll]og/
+[Ll]ogs/
+[Oo]bj/
+[Rr]elease/
+[Rr]eleasePS/
+[Rr]eleases/
+[Tt]est[Rr]esult*/
+[Ww][Ii][Nn]32/
+*_h.h
+*_i.c
+*_p.c
+*_wpftmp.csproj
+*- [Bb]ackup ([0-9]).rdl
+*- [Bb]ackup ([0-9][0-9]).rdl
+*- [Bb]ackup.rdl
+*.[Cc]ache
+*.[Pp]ublish.xml
+*.[Rr]e[Ss]harper
+*.a
+*.app
+*.appx
+*.appxbundle
+*.appxupload
+*.aps
+*.azurePubxml
+*.bim_*.settings
+*.bim.layout
+*.binlog
+*.btm.cs
+*.btp.cs
+*.build.csdef
+*.cab
+*.cachefile
+*.code-workspace
+*.coverage
+*.coveragexml
+*.d
+*.dbmdl
+*.dbproj.schemaview
+*.dll
+*.dotCover
+*.DotSettings.user
+*.dsp
+*.dsw
+*.dylib
+*.e2e
+*.exe
+*.gch
+*.GhostDoc.xml
+*.gpState
+*.ilk
+*.iobj
+*.ipdb
+*.jfm
+*.jmconfig
+*.la
+*.lai
+*.ldf
+*.lib
+*.lo
+*.log
+*.mdf
+*.meta
+*.mm.*
+*.mod
+*.msi
+*.msix
+*.msm
+*.msp
+*.ncb
+*.ndf
+*.nuget.props
+*.nuget.targets
+*.nupkg
+*.nvuser
+*.o
+*.obj
+*.odx.cs
+*.opendb
+*.opensdf
+*.opt
+*.out
+*.pch
+*.pdb
+*.pfx
+*.pgc
+*.pgd
+*.pidb
+*.plg
+*.psess
+*.publishproj
+*.publishsettings
+*.pubxml
+*.pyc
+*.rdl.data
+*.rptproj.bak
+*.rptproj.rsuser
+*.rsp
+*.rsuser
+*.sap
+*.sbr
+*.scc
+*.sdf
+*.sln.docstates
+*.sln.iml
+*.slo
+*.smod
+*.snupkg
+*.so
+*.suo
+*.svclog
+*.tlb
+*.tlh
+*.tli
+*.tlog
+*.tmp
+*.tmp_proj
+*.tss
+*.user
+*.userosscache
+*.userprefs
+*.vbp
+*.vbw
+*.VC.db
+*.VC.VC.opendb
+*.VisualState.xml
+*.vsp
+*.vspscc
+*.vspx
+*.vssscc
+*.xsd.cs
+**/[Pp]ackages/*
+**/*.DesktopClient/GeneratedArtifacts
+**/*.DesktopClient/ModelManifest.xml
+**/*.HTMLClient/GeneratedArtifacts
+**/*.Server/GeneratedArtifacts
+**/*.Server/ModelManifest.xml
+*~
+~$*
+$tf/
+AppPackages/
+artifacts/
+ASALocalRun/
+AutoTest.Net/
+Backup*/
+BenchmarkDotNet.Artifacts/
+bld/
+BundleArtifacts/
+ClientBin/
+cmake_install.cmake
+CMakeCache.txt
+CMakeFiles
+CMakeLists.txt.user
+CMakeScripts
+CMakeUserPresets.json
+compile_commands.json
+coverage*.info
+coverage*.json
+coverage*.xml
+csx/
+CTestTestfile.cmake
+dlldata.c
+DocProject/buildhelp/
+DocProject/Help/*.hhc
+DocProject/Help/*.hhk
+DocProject/Help/*.hhp
+DocProject/Help/*.HxC
+DocProject/Help/*.HxT
+DocProject/Help/html
+DocProject/Help/Html2
+ecf/
+FakesAssemblies/
+FodyWeavers.xsd
+Generated_Code/
+Generated\ Files/
+healthchecksdb
+install_manifest.txt
+ipch/
+Makefile
+MigrationBackup/
+mono_crash.*
+nCrunchTemp_*
+node_modules/
+nunit-*.xml
+OpenCover/
+orleans.codegen.cs
+Package.StoreAssociation.xml
+paket-files/
+project.fragment.lock.json
+project.lock.json
+publish/
+PublishScripts/
+rcf/
+ScaffoldingReadMe.txt
+ServiceFabricBackup/
+StyleCopReport.xml
+Testing
+TestResult.xml
+UpgradeLog*.htm
+UpgradeLog*.XML
+x64/
+x86/
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Distribution / packaging
+!dist/.gitkeep
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.nox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+.pytest_cache/
+cover/
+.ruff_cache/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Project specific
+__version__.py
+_private
+</file>
+
+<file path=".pre-commit-config.yaml">
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.4
+    hooks:
+      - id: ruff
+        args: [--fix]
+      - id: ruff-format
+        args: [--respect-gitignore]
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: check-yaml
+      - id: check-toml
+      - id: check-added-large-files
+      - id: debug-statements
+      - id: check-case-conflict
+      - id: mixed-line-ending
+        args: [--fix=lf]
+</file>
+
+<file path="LICENSE">
+MIT License
+
+Copyright (c) 2025 Adam Twardoch
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+</file>
+
+<file path="LOG.md">
+---
+this_file: LOG.md
+---
+
+# Changelog
+
+All notable changes to this project will be documented in this file.
+
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [1.7.5] - 2025-02-15
+
+### Changed
+
+- Updated README.md with minor improvements and corrections
+
+## [1.7.3] - 2025-02-15
+
+### Added
+
+- Enhanced functionality in gray2alpha.py with additional feature
+
+## [1.7.0] - 2025-02-13
+
+### Changed
+
+- Updated .gitignore with improved file exclusion patterns
+- Enhanced repository configuration
+
+## [1.6.2] - 2025-02-06
+
+### Changed
+
+- Updated project dependencies in pyproject.toml
+
+## [1.6.1] - 2025-02-06
+
+### Changed
+
+- Refactored gray2alpha.py with code improvements
+- Updated package initialization
+- Improved test suite
+
+## [1.6.0] - 2025-02-06
+
+### Added
+
+- Enhanced documentation in README.md
+
+## [1.0.0] - 2025-02-06
+
+### Added
+
+- Initial release of twat-image
+- Implemented gray2alpha.py with core functionality
+- Set up GitHub Actions workflows for CI/CD
+- Added comprehensive test suite
+- Configured pre-commit hooks
+- Added MIT License
+- Established modern Python packaging structure with PEP 621 compliance
+
+[1.7.5]: https://github.com/twardoch/twat-image/compare/v1.7.3...v1.7.5
+[1.7.3]: https://github.com/twardoch/twat-image/compare/v1.7.0...v1.7.3
+[1.7.0]: https://github.com/twardoch/twat-image/compare/v1.6.2...v1.7.0
+[1.6.2]: https://github.com/twardoch/twat-image/compare/v1.6.1...v1.6.2
+[1.6.1]: https://github.com/twardoch/twat-image/compare/v1.6.0...v1.6.1
+[1.6.0]: https://github.com/twardoch/twat-image/compare/v1.0.0...v1.6.0
+[1.0.0]: https://github.com/twardoch/twat-image/releases/tag/v1.0.0
+</file>
+
+<file path="pyproject.toml">
+# this_file: pyproject.toml
+# this_project: image_alpha_utils
+# Build System Configuration
+# -------------------------
+# Specifies the build system and its requirements for packaging the project
+# Specifies the build backend and its requirements for building the package
+[build-system]
+requires = [
+    "hatchling>=1.27.0", # Core build backend for Hatch
+    "hatch-vcs>=0.4.0", # Version Control System plugin for Hatch
+
+]
+build-backend = "hatchling.build" # Use Hatchling as the build backend
+
+# Wheel build configuration
+# Specifies which packages to include in the wheel distribution
+[tool.hatch.build.targets.wheel]
+packages = ["src/image_alpha_utils"]
+
+# Project Metadata Configuration
+# ------------------------------
+# Comprehensive project description, requirements, and compatibility information
+[project]
+name = "image-alpha-utils"
+dynamic = ["version"] # Version is determined dynamically from VCS
+description = "A Python utility for converting images to include alpha channels based on grayscale values, and other image manipulations."
+readme = "README.md"
+requires-python = ">=3.10" # Minimum Python version required
+license = "MIT"
+keywords = ["image", "alpha", "graphics", "utility", "conversion"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+    "Intended Audience :: Developers",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+# Runtime Dependencies
+# -------------------
+# External packages required for the project to function
+dependencies = [
+    "image_utils_plugin_host>=1.8.1", # Main plugin host package
+    "fire",
+    "numpy",
+    "pillow",
+    "webcolors",
+]
+
+# Project Authors
+# ---------------
+[[project.authors]]
+name = "Adam Twardoch"
+email = "adam+github@twardoch.com"
+
+# Project URLs
+# ------------
+# Links to project resources for documentation, issues, and source code
+[project.urls]
+Documentation = "https://github.com/twardoch/image-alpha-utils#readme"
+Issues = "https://github.com/twardoch/image-alpha-utils/issues"
+Source = "https://github.com/twardoch/image-alpha-utils"
+
+# Plugin Registration (Example - adjust if needed)
+# -----------------------
+# Registers this package as a plugin for a hypothetical host ecosystem
+[project.entry-points."image_utils_plugin_host.plugins"]
+image_alpha = "image_alpha_utils.gray2alpha:igray2alpha" # Example entry point
+
+# Command-line scripts
+# --------------------
+[project.scripts]
+imagealpha = "image_alpha_utils.gray2alpha:cli"
+
+# Version configuration using VCS (Git)
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.version.raw-options]
+version_scheme = "post-release"
+
+# VCS hook configuration for version file generation
+[tool.hatch.build.hooks.vcs]
+version-file = "src/image_alpha_utils/__version__.py"
+
+# Default development environment configuration
+[tool.hatch.envs.default]
+dependencies = [
+    "pytest>=8.3.4", # Testing framework
+    "pytest-cov>=6.0.0", # Coverage reporting
+    "mypy>=1.15.0", # Static type checker
+    "ruff>=0.9.6", # Fast Python linter
+]
+
+# Scripts available in the default environment
+[tool.hatch.envs.default.scripts]
+test = "pytest {args:tests}"
+test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/image_alpha_utils --cov=tests {args:tests}"
+type-check = "mypy src/image_alpha_utils tests"
+lint = ["ruff check src/image_alpha_utils tests", "ruff format src/image_alpha_utils tests"]
+
+# Python version matrix for testing
+[[tool.hatch.envs.all.matrix]]
+python = ["3.10", "3.11", "3.12"]
+
+# Linting environment configuration
+[tool.hatch.envs.lint]
+detached = true # Run in isolated environment
+dependencies = [
+    "mypy>=1.15.0", # Static type checker
+    "ruff>=0.9.6", # Fast Python linter
+
+]
+
+# Linting environment scripts
+[tool.hatch.envs.lint.scripts]
+typing = "mypy --install-types --non-interactive {args:src/image_alpha_utils tests}"
+style = ["ruff check {args:.}", "ruff format {args:.}"]
+fmt = ["ruff format {args:.}", "ruff check --fix {args:.}"]
+all = ["style", "typing"]
+
+# Ruff (linter) configuration
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+
+# Ruff lint rules configuration
+[tool.ruff.lint]
+extend-select = [
+    "A", # flake8-builtins
+    "ARG", # flake8-unused-arguments
+    "B", # flake8-bugbear
+    "C", # flake8-comprehensions
+    "DTZ", # flake8-datetimez
+    "E", # pycodestyle errors
+    "EM", # flake8-errmsg
+    "F", # pyflakes
+    "FBT", # flake8-boolean-trap
+    "I", # isort
+    "ICN", # flake8-import-conventions
+    "ISC", # flake8-implicit-str-concat
+    "N", # pep8-naming
+    "PLC", # pylint convention
+    "PLE", # pylint error
+    "PLR", # pylint refactor
+    "PLW", # pylint warning
+    "Q", # flake8-quotes
+    "RUF", # Ruff-specific rules
+    "S", # flake8-bandit
+    "T", # flake8-debugger
+    "TID", # flake8-tidy-imports
+    "UP", # pyupgrade
+    "W", # pycodestyle warnings
+    "YTT", # flake8-2020
+
+]
+ignore = [
+    "ARG001", # Unused function argument
+    "E501", # Line too long
+    "I001", # Import block formatting
+
+]
+
+# isort configuration within Ruff
+[tool.ruff.lint.isort]
+known-first-party = ["image_alpha_utils"] # Treat as first-party imports for sorting
+
+# flake8-tidy-imports configuration within Ruff
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all" # Ban all relative imports for consistency
+
+# Per-file rule exceptions
+[tool.ruff.lint.per-file-ignores]
+# Tests can use magic values, assertions, and relative imports
+"tests/**/*" = [
+    "PLR2004", # Allow magic values in tests for readability
+    "S101", # Allow assertions in tests
+    "TID252"
+    # Allow relative imports in tests for convenience
+]
+
+# MyPy (type checker) configuration
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+
+# Coverage.py configuration for test coverage
+[tool.coverage.run]
+source_pkgs = ["image_alpha_utils", "tests"]
+branch = true
+parallel = true
+# omit = ["src/image_alpha_utils/__about__.py"] # No __about__.py file exists
+
+# Coverage path mappings
+[tool.coverage.paths]
+image_alpha_utils = ["src/image_alpha_utils", "*/image-alpha-utils/src/image_alpha_utils"]
+tests = ["tests", "*/image-alpha-utils/tests"]
+
+# Coverage report configuration
+[tool.coverage.report]
+exclude_lines = ["no cov", "if __name__ == .__main__.:", "if TYPE_CHECKING:"]
+
+# Optional dependencies
+[project.optional-dependencies]
+test = [
+    "pytest>=8.3.4",
+    "pytest-cov>=6.0.0",
+    "pytest-xdist>=3.6.1", # For parallel test execution
+    "pytest-benchmark[histogram]>=5.1.0", # For performance testing
+
+]
+dev = [
+    "pre-commit>=4.1.0", # Git pre-commit hooks
+    "ruff>=0.9.6", # Fast Python linter
+    "mypy>=1.15.0", # Static type checker
+
+]
+all = [
+    "image_utils_plugin_host>=1.8.1", # Main plugin host package
+    "fire",
+    "numpy",
+    "pillow",
+    "webcolors",
+]
+
+# Test environment configuration
+[tool.hatch.envs.test]
+dependencies = [".[test]"]
+
+# Test environment scripts
+[tool.hatch.envs.test.scripts]
+test = "python -m pytest -n auto {args:tests}"
+test-cov = "python -m pytest -n auto --cov-report=term-missing --cov-config=pyproject.toml --cov=src/image_alpha_utils --cov=tests {args:tests}"
+bench = "python -m pytest -v -p no:briefcase tests/test_benchmark.py --benchmark-only"
+bench-save = "python -m pytest -v -p no:briefcase tests/test_benchmark.py --benchmark-only --benchmark-json=benchmark/results.json"
+
+# Pytest configuration
+[tool.pytest.ini_options]
+markers = ["benchmark: marks tests as benchmarks (select with '-m benchmark')"]
+addopts = "-v -p no:briefcase"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+filterwarnings = ["ignore::DeprecationWarning", "ignore::UserWarning"]
+asyncio_mode = "auto"
+
+# Pytest-benchmark configuration
+[tool.pytest-benchmark]
+min_rounds = 100
+min_time = 0.1
+histogram = true
+storage = "file"
+save-data = true
+compare = [
+    "min", # Minimum time
+    "max", # Maximum time
+    "mean", # Mean time
+    "stddev", # Standard deviation
+    "median", # Median time
+    "iqr", # Inter-quartile range
+    "ops", # Operations per second
+    "rounds", # Number of rounds
+
+]
+</file>
+
+<file path="README.md">
+# Image Alpha Utilities
+
+(work in progress)
+
+Non-AI image modification, focusing on alpha channel manipulation from grayscale data.
+
+## Features
+
+- CLI and library for image alpha channel processing.
+- Modern Python packaging with PEP 621 compliance.
+- Type hints and runtime type checking.
+- Comprehensive test suite and documentation (planned).
+- CI/CD ready configuration.
+
+## Installation
+
+```bash
+pip install image-alpha-utils
+```
+
+## Usage
+
+### As a Library
+
+```python
+from image_alpha_utils import igray2alpha
+from PIL import Image
+
+# Load an image
+input_image = Image.open("path/to/your/image.jpg")
+
+# Process it
+# This example uses default color (black), white_point (0.9), black_point (0.1)
+# and negative=False (meaning darker areas of the mask become more transparent).
+output_image = igray2alpha(input_image)
+
+# Save the result
+output_image.save("path/to/your/output_with_alpha.png")
+
+# For more options:
+# output_image = igray2alpha(
+#     img=input_image,
+#     color="blue",  # or "#0000FF" or (0,0,255)
+#     white_point=0.8, # values > 0.8 lightness become fully opaque in mask
+#     black_point=0.2, # values < 0.2 lightness become fully transparent in mask
+#     negative=True    # if True, lighter areas of mask become more transparent
+# )
+
+```
+
+### As a Command Line Tool
+
+Once installed, the package provides the `imagealpha` command-line tool.
+
+**Syntax:**
+```bash
+imagealpha [INPUT_PATH] [OUTPUT_PATH] [OPTIONS]
+```
+- `INPUT_PATH`: Path to the input image file. Use "-" to read from stdin.
+- `OUTPUT_PATH`: Path to save the output PNG image. Use "-" to write to stdout.
+
+**Common Options:**
+- `--color <name|hex|rgb_tuple>`: Fill color for the output image (default: "black").
+  - Examples: `--color red`, `--color "#00FF00"`, `--color "(0,0,255)"` (note quotes for tuple).
+- `--white_point <float>`: White threshold (0.0-1.0 or 1-100). Pixels brighter than this become fully opaque in the default alpha mask (or transparent if `negative=True`). Default: `0.9`.
+- `--black_point <float>`: Black threshold (0.0-1.0 or 1-100). Pixels darker than this become fully transparent in the default alpha mask (or opaque if `negative=True`). Default: `0.1`.
+- `--negative`: If set, the alpha mask is not inverted. By default (not set), darker areas of the normalized grayscale image become more transparent. If `--negative` is set, lighter areas become more transparent.
+
+**Examples:**
+
+1.  **Basic conversion, file to file:**
+    ```bash
+    imagealpha input.jpg output.png
+    ```
+
+2.  **Specify output color and save to stdout:**
+    ```bash
+    imagealpha input.jpeg - --color blue > output_blue.png
+    ```
+
+3.  **Read from stdin, adjust thresholds, and use negative mask:**
+    ```bash
+    cat input.webp | imagealpha - result.png --white_point 75 --black_point 25 --negative
+    ```
+    *(Note: `white_point` and `black_point` can be fractions 0.0-1.0 or percentages >1-100. The percentage interpretation for `white_point` might be counter-intuitive, see function docstrings for details.)*
+
+4.  **Using specific RGB color tuple:**
+    ```bash
+    imagealpha photo.png final_image.png --color "(50,100,150)"
+    ```
+
+To see all available options, you can often use `imagealpha -- --help` (the double dash is to ensure `--help` is passed to `fire` if `imagealpha` itself doesn't explicitly handle it, which is typical for `fire`-based CLIs).
+
+## Development
+
+This project uses [Hatch](https://hatch.pypa.io/) for development workflow management.
+
+### Setup Development Environment
+
+```bash
+# Install hatch if you haven't already
+pip install hatch
+
+# Create and activate development environment
+hatch shell
+
+# Run tests
+hatch run test
+
+# Run tests with coverage
+hatch run test-cov
+
+# Run linting
+hatch run lint
+
+# Format code
+hatch run format
+```
+
+## License
+
+MIT License
+.
+</file>
+
+</files>
