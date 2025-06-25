@@ -1,0 +1,295 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# dependencies = [
+#   "Pillow",
+#   "python-fire",
+#   "rich",
+#   "numpy",
+#   "opencv-python-headless"
+# ]
+# ///
+# this_file: ~/bin/img/imgany2gray.py
+
+
+"""
+Convert any image to normalized grayscale with optional alpha mask.
+
+This script takes an input image, converts it to grayscale using a perceptual algorithm,
+normalizes it, applies noise reduction if requested, and optionally creates an alpha mask.
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+import sys
+from typing import Literal
+
+import fire
+import numpy as np
+from PIL import Image, ImageOps, ImageFilter
+import cv2
+from rich.console import Console
+from rich.logging import RichHandler
+
+# Configure rich logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True)],
+)
+log = logging.getLogger("any2gray")
+console = Console()
+
+# Import gray2alpha functionality if needed for the --add_alpha option
+try:
+    from twat_image.gray2alpha import igray2alpha
+except ImportError:
+    # Direct import when running as script
+    try:
+        from gray2alpha import igray2alpha
+    except ImportError:
+        log.warning(
+            "gray2alpha module not found. Alpha mask creation will not be available."
+        )
+        igray2alpha = None
+
+
+def sigmoid_curve(x: np.ndarray, strength: float = 3.0) -> np.ndarray:
+    """Apply a sigmoid curve to the input array for S-curve contrast enhancement.
+
+    Args:
+        x: Input array with values in range [0, 1]
+        strength: Strength of the sigmoid curve effect. Higher values create a steeper curve.
+
+    Returns:
+        Array with sigmoid-transformed values in range [0, 1]
+    """
+    # Center around 0
+    x = 2 * x - 1
+    # Apply sigmoid: 1 / (1 + exp(-strength * x))
+    y = 1 / (1 + np.exp(-strength * x))
+    return y
+
+
+def apply_noise_reduction(
+    img: Image.Image,
+    method: Literal["median", "bilateral", "gaussian", "nlmeans"] = "median",
+    strength: int = 3,
+) -> Image.Image:
+    """Apply noise reduction to the image.
+
+    Args:
+        img: Input PIL image
+        method: Noise reduction method to use
+        strength: Strength/kernel size of the noise reduction
+
+    Returns:
+        Noise-reduced PIL image
+    """
+    # Ensure strength is odd for kernel-based methods
+    if method in ["median", "gaussian"] and strength % 2 == 0:
+        strength += 1
+        log.debug(f"Adjusted noise reduction strength to {strength} (must be odd)")
+
+    # PIL-based methods
+    if method == "median":
+        return img.filter(ImageFilter.MedianFilter(size=strength))
+    elif method == "gaussian":
+        return img.filter(ImageFilter.GaussianBlur(radius=strength / 2))
+
+    # OpenCV-based methods (require conversion to/from numpy arrays)
+    img_array = np.array(img)
+
+    if method == "bilateral":
+        # Bilateral filter preserves edges while reducing noise
+        # Parameters: img, diameter, sigmaColor, sigmaSpace
+        filtered = cv2.bilateralFilter(img_array, strength, strength * 2, strength / 2)
+        return Image.fromarray(filtered)
+    elif method == "nlmeans":
+        # Non-local means denoising (very effective but slower)
+        # Parameters: img, h (filter strength), templateWindowSize, searchWindowSize
+        h_param = strength * 3
+        filtered = cv2.fastNlMeansDenoising(img_array, None, h_param, 7, 21)
+        return Image.fromarray(filtered)
+
+    # Fallback
+    log.warning(
+        f"Unknown noise reduction method: {method}. No noise reduction applied."
+    )
+    return img
+
+
+def gauss_curve_quantization(img: Image.Image, strength: float = 3.0) -> Image.Image:
+    """Apply Gauss-curve quantization to compress luminance near extremes.
+
+    This creates an S-curve effect that compresses shadows and highlights
+    while maintaining gradation in the midtones.
+
+    Args:
+        img: Input grayscale PIL image
+        strength: Strength of the effect (higher = more contrast)
+
+    Returns:
+        Processed PIL image
+    """
+    # Convert to numpy array for faster processing
+    img_array = np.array(img, dtype=np.float32) / 255.0
+
+    # Apply sigmoid curve
+    processed = sigmoid_curve(img_array, strength)
+
+    # Convert back to 8-bit range and PIL Image
+    result = (processed * 255).astype(np.uint8)
+    return Image.fromarray(result)
+
+
+class Any2Gray:
+    """CLI tool to convert images to normalized grayscale."""
+
+    def convert(
+        self,
+        input_path: str,
+        output_path: str,
+        contrast_method: Literal[
+            "autocontrast", "equalize", "none", "sigmoid"
+        ] = "autocontrast",
+        noise_reduction: Literal[
+            "none", "median", "bilateral", "gaussian", "nlmeans"
+        ] = "none",
+        noise_strength: int = 3,
+        sigmoid_strength: float = 3.0,
+        add_alpha: bool = False,
+        alpha_color: str = "black",
+        white_point: float = 0.9,
+        black_point: float = 0.1,
+        invert_alpha: bool = False,
+        verbose: bool = False,
+    ) -> None:
+        """Converts an image file to normalized grayscale with optional alpha mask.
+
+        Args:
+            input_path: Path to the input image file
+            output_path: Path where the output image should be saved
+            contrast_method: Method used for contrast adjustment
+            noise_reduction: Method for noise reduction
+            noise_strength: Strength of the noise reduction (higher = stronger effect)
+            sigmoid_strength: Strength of the sigmoid curve for contrast (if using sigmoid method)
+            add_alpha: Whether to create an RGBA image with an alpha mask
+            alpha_color: Color to use for the alpha mask (if add_alpha is True)
+            white_point: Threshold above which pixels become white (if add_alpha is True)
+            black_point: Threshold below which pixels become black (if add_alpha is True)
+            invert_alpha: Whether to invert the alpha mask (if add_alpha is True)
+            verbose: Whether to show debug logging information
+        """
+        # Set up logging level
+        if verbose:
+            log.setLevel(logging.DEBUG)
+
+        log.debug(f"Starting conversion for {input_path}")
+
+        # Load the input image
+        try:
+            img = Image.open(input_path)
+            log.debug(f"Image loaded: {img.format}, {img.size}, {img.mode}")
+        except FileNotFoundError:
+            log.error(f"Error: Input file not found at {input_path}")
+            sys.exit(1)
+        except Exception as e:
+            log.error(f"Error opening image {input_path}: {e}")
+            sys.exit(1)
+
+        # Convert to grayscale using perceptual weights
+        img_gray = img.convert("L")
+        log.debug("Image converted to grayscale ('L' mode)")
+
+        # Apply noise reduction if requested
+        if noise_reduction != "none":
+            img_processed = apply_noise_reduction(
+                img_gray, noise_reduction, noise_strength
+            )
+            log.debug(
+                f"Applied {noise_reduction} noise reduction with strength {noise_strength}"
+            )
+        else:
+            img_processed = img_gray
+            log.debug("No noise reduction applied")
+
+        # Apply contrast adjustment
+        if contrast_method == "autocontrast":
+            img_contrast = ImageOps.autocontrast(img_processed)
+            log.debug("Applied autocontrast")
+        elif contrast_method == "equalize":
+            img_contrast = ImageOps.equalize(img_processed)
+            log.debug("Applied histogram equalization")
+        elif contrast_method == "sigmoid":
+            img_contrast = gauss_curve_quantization(img_processed, sigmoid_strength)
+            log.debug(
+                f"Applied sigmoid curve contrast with strength {sigmoid_strength}"
+            )
+        elif contrast_method == "none":
+            img_contrast = img_processed
+            log.debug("No contrast adjustment applied")
+        else:
+            log.warning(
+                f"Unknown contrast method '{contrast_method}'. Using 'autocontrast'."
+            )
+            img_contrast = ImageOps.autocontrast(img_processed)
+
+        img_final = img_contrast
+
+        # Create alpha mask if requested
+        if add_alpha:
+            if igray2alpha is None:
+                log.error("Cannot create alpha mask: gray2alpha module not available")
+                sys.exit(1)
+
+            try:
+                img_final = igray2alpha(
+                    img_final,
+                    color=alpha_color,
+                    white_point=white_point,
+                    black_point=black_point,
+                    negative=invert_alpha,
+                )
+                log.debug("Applied alpha mask")
+            except Exception as e:
+                log.error(f"Error creating alpha mask: {e}")
+                sys.exit(1)
+
+        # Save the output image
+        try:
+            # Create output directory if it doesn't exist
+            output_dir = os.path.dirname(output_path)
+            if output_dir:
+                os.makedirs(output_dir, exist_ok=True)
+
+            # Handle alpha channel file formats
+            if (
+                add_alpha
+                and "A" in img_final.mode
+                and not output_path.lower().endswith((".png", ".tif", ".tiff"))
+            ):
+                log.warning(
+                    "Output format might not support alpha channel. Saving as PNG instead."
+                )
+                base, _ = os.path.splitext(output_path)
+                output_path = f"{base}.png"
+
+            img_final.save(output_path)
+            log.debug(f"Output saved to {output_path}")
+            console.print(f"Processed image saved to [green]{output_path}[/green]")
+
+        except Exception as e:
+            log.error(f"Error saving image to {output_path}: {e}")
+            sys.exit(1)
+
+
+def main():
+    """CLI entry point."""
+    fire.Fire(Any2Gray().convert)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,266 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# dependencies = ["fire", "rich", "pillow", "numpy"]
+# ///
+# this_file: ~/bin/img/imgsort0.py
+
+import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from pathlib import Path
+from typing import List, Set, Tuple
+
+import fire
+import numpy as np
+from PIL import Image
+from rich.console import Console
+from rich.progress import Progress
+
+console = Console()
+
+
+def load_and_downsample(
+    img_path: Path,
+    downscale_factor: int = 4,
+    target_size: Tuple[int, int] | None = (512, 512),
+) -> Tuple[np.ndarray, int, int]:
+    """Load and downsample an image.
+
+    Args:
+        img_path: Path to the image file.
+        downscale_factor: Factor by which to reduce image dimensions.
+        target_size: Optional tuple of (width, height) to resize to.
+                    If None, image will be downsampled by downscale_factor.
+
+    Returns:
+        A tuple: (downsampled RGB image as float32 NumPy array, new width, new height).
+
+    Raises:
+        Exception: If image cannot be loaded or processed.
+    """
+    try:
+        with Image.open(img_path) as im:
+            im = im.convert("RGB")
+            if target_size is not None:
+                width, height = target_size
+            else:
+                width = im.size[0] // downscale_factor
+                height = im.size[1] // downscale_factor
+            im = im.resize((width, height), Image.Resampling.LANCZOS)
+            return np.array(im, dtype=np.float32), width, height
+    except Exception as e:
+        console.print(f"[red]Error processing {img_path}: {str(e)}[/red]")
+        raise
+
+
+def compute_grayscale_brightness(rgb_array: np.ndarray) -> float:
+    """Convert RGB array to grayscale and compute average brightness.
+
+    Args:
+        rgb_array: RGB image as (H,W,3) float32 array
+
+    Returns:
+        Average brightness value
+    """
+    # Standard grayscale conversion weights
+    weights = np.array([0.299, 0.587, 0.114])
+    gray = np.sum(rgb_array * weights, axis=2)
+    return float(gray.mean())
+
+
+def mse_distance(arr1: np.ndarray, arr2: np.ndarray) -> float:
+    """Compute mean squared error between two RGB arrays.
+
+    Args:
+        arr1: First RGB array
+        arr2: Second RGB array
+
+    Returns:
+        MSE distance value
+    """
+    return float(np.mean((arr1 - arr2) ** 2))
+
+
+def get_image_files(input_path: Path) -> List[Path]:
+    """Get all supported image files from directory.
+
+    Args:
+        input_path: Directory to search
+
+    Returns:
+        List of paths to image files
+    """
+    extensions = {".png", ".jpg", ".jpeg"}
+    return sorted(
+        p
+        for p in input_path.iterdir()
+        if p.is_file() and p.suffix.lower() in extensions
+    )
+
+
+def compute_pairwise_distances(
+    images: List[np.ndarray],
+    progress: Progress,
+    total: int,
+) -> np.ndarray:
+    """Compute pairwise MSE distances between all images.
+
+    Args:
+        images: List of image arrays
+        progress: Progress bar instance
+        total: Total number of comparisons
+
+    Returns:
+        Square matrix of pairwise distances
+    """
+    n = len(images)
+    distance_matrix = np.zeros((n, n), dtype=np.float32)
+
+    task = progress.add_task("Computing distances...", total=total)
+
+    def dist_pair(i: int, j: int) -> Tuple[int, int, float]:
+        return i, j, mse_distance(images[i], images[j])
+
+    pairs = [(i, j) for i in range(n) for j in range(i + 1, n)]
+    with ThreadPoolExecutor() as executor:
+        futures = [executor.submit(dist_pair, i, j) for i, j in pairs]
+        for future in as_completed(futures):
+            i, j, dist = future.result()
+            distance_matrix[i, j] = dist
+            distance_matrix[j, i] = dist
+            progress.advance(task)
+
+    return distance_matrix
+
+
+def find_nearest_neighbor_path(
+    distance_matrix: np.ndarray,
+    start_idx: int,
+    progress: Progress,
+) -> List[int]:
+    """Find path visiting all images starting from given index.
+
+    Args:
+        distance_matrix: Matrix of pairwise distances
+        start_idx: Index to start from
+        progress: Progress bar instance
+
+    Returns:
+        List of indices giving the path order
+    """
+    n = len(distance_matrix)
+    unvisited: Set[int] = set(range(n))
+    path: List[int] = [start_idx]
+    current = start_idx
+    unvisited.remove(current)
+
+    task = progress.add_task("Finding path...", total=n - 1)
+
+    while unvisited:
+        next_idx = min(unvisited, key=lambda x: distance_matrix[current, x])
+        path.append(next_idx)
+        unvisited.remove(next_idx)
+        current = next_idx
+        progress.advance(task)
+
+    return path
+
+
+def cli(input_folder: str | Path, rename: bool = False) -> None:
+    """Sort image files by visual similarity.
+
+    Loads PNG and JPG files from input folder, computes visual similarity
+    between pairs, and finds a path through all images starting with the
+    darkest. Can optionally rename files to reflect the sorted order.
+
+    Args:
+        input_folder: Directory containing image files
+        rename: Whether to rename files with sequential numbers
+    """
+    input_path = Path(input_folder)
+    if not input_path.exists():
+        console.print("[red]Error: Input folder does not exist[/red]")
+        return
+
+    image_paths = get_image_files(input_path)
+    if not image_paths:
+        console.print("[yellow]No image files found[/yellow]")
+        return
+
+    n = len(image_paths)
+    console.print(f"Processing {n} image files...")
+
+    # First pass to determine target size
+    target_size = None
+    try:
+        with Image.open(image_paths[0]) as first_img:
+            w, h = first_img.size
+            target_size = (w // 4, h // 4)  # Using same downscale factor
+    except Exception as e:
+        console.print(f"[red]Error reading first image: {str(e)}[/red]")
+        return
+
+    images: List[np.ndarray] = []
+    dimensions: List[Tuple[int, int]] = []
+    with Progress() as progress:
+        task = progress.add_task("Loading images...", total=n)
+        for path in image_paths:
+            try:
+                img, w, h = load_and_downsample(path, target_size=target_size)
+                images.append(img)
+                dimensions.append((w, h))
+                progress.advance(task)
+            except Exception:
+                continue
+
+    if not images:
+        console.print("[red]No valid images could be processed[/red]")
+        return
+
+    brightness_values = [compute_grayscale_brightness(img) for img in images]
+    darkest_index = int(np.argmin(brightness_values))
+
+    with Progress() as progress:
+        total_comparisons = (n * (n - 1)) // 2
+        distance_matrix = compute_pairwise_distances(
+            images, progress, total_comparisons
+        )
+        path = find_nearest_neighbor_path(distance_matrix, darkest_index, progress)
+
+    width_digits = len(str(n))
+    if rename:
+        console.print("\nRenaming files...")
+        new_names: List[Path] = []
+        # Build new names in the input folder (flatten structure)
+        for i, idx in enumerate(path, start=1):
+            old_path = image_paths[idx]
+            dims = dimensions[idx]
+            new_name = (
+                input_path
+                / f"{i:0{width_digits}d}--{old_path.stem}-{dims[0]}x{dims[1]}{old_path.suffix}"
+            )
+            if new_name in new_names:
+                console.print(
+                    f"[red]Error: Duplicate name would be created: {new_name}[/red]"
+                )
+                return
+            new_names.append(new_name)
+
+        try:
+            with Progress() as progress:
+                task = progress.add_task("Renaming...", total=n)
+                paths_to_rename = [image_paths[i] for i in path]
+                for old_path, new_name in zip(paths_to_rename, new_names):
+                    shutil.move(old_path, new_name)
+                    progress.advance(task)
+            console.print("[green]Successfully renamed all files![/green]")
+        except Exception as e:
+            console.print(f"[red]Error during renaming: {str(e)}[/red]")
+    else:
+        console.print("\nSorted order:")
+        for i, idx in enumerate(path, start=1):
+            name = image_paths[idx].name
+            console.print(f"{i:>{width_digits}} {name}")
+
+
+if __name__ == "__main__":
+    fire.Fire(cli)

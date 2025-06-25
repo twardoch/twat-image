@@ -1,0 +1,124 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# dependencies = ["fire", "Pillow"]
+# ///
+# this_file: imgquart.py
+
+import logging
+from pathlib import Path
+
+import fire
+from PIL import Image
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
+
+def get_image_quarters(img: Image.Image) -> list[tuple[Image.Image, tuple[int, int]]]:
+    """
+    Split an image into four equal quarters.
+
+    Args:
+        img: PIL Image object
+
+    Returns:
+        List of tuples containing (quarter_image, (x, y) position)
+    """
+    width, height = img.size
+    half_width = width // 2
+    half_height = height // 2
+
+    # Handle odd dimensions by rounding up
+    if width % 2:
+        half_width += 1
+    if height % 2:
+        half_height += 1
+
+    quarters = []
+    positions = [(0, 0), (half_width, 0), (0, half_height), (half_width, half_height)]
+
+    for x, y in positions:
+        # Calculate the crop box for each quarter
+        crop_box = (x, y, min(x + half_width, width), min(y + half_height, height))
+        quarter = img.crop(crop_box)
+        quarters.append((quarter, (x, y)))
+
+    return quarters
+
+
+def process_image(input_path: Path, output_dir: Path) -> None:
+    """
+    Process a single image by splitting it into quarters.
+
+    Args:
+        input_path: Path to input image
+        output_dir: Directory to save output quarters
+    """
+    try:
+        with Image.open(input_path) as img:
+            # Convert to RGB if necessary (for PNG with transparency)
+            if img.mode in ("RGBA", "LA"):
+                background = Image.new("RGB", img.size, (255, 255, 255))
+                background.paste(img, mask=img.split()[-1])
+                img = background
+
+            quarters = get_image_quarters(img)
+
+            # Save each quarter
+            base_name = input_path.stem
+            extension = ".png"
+
+            for i, (quarter, _) in enumerate(quarters, 1):
+                output_path = output_dir / f"{base_name}-{i}{extension}"
+                quarter.save(output_path, "PNG", quality=100)
+                logger.info(f"Saved quarter {i} to {output_path}")
+
+    except Exception as e:
+        logger.error(f"Error processing {input_path}: {str(e)}")
+        raise
+
+
+def split_images(folder_path: str) -> None:
+    """
+    Split all images in the specified folder into quarters.
+
+    Args:
+        folder_path: Path to folder containing images
+    """
+    folder = Path(folder_path)
+    if not folder.exists():
+        raise ValueError(f"Folder does not exist: {folder_path}")
+
+    # Create output directory
+    output_dir = folder / "quarters"
+    output_dir.mkdir(exist_ok=True)
+
+    # Supported image extensions
+    extensions = {".jpg", ".jpeg", ".png"}
+
+    # Process all images
+    image_files = [f for f in folder.glob("*") if f.suffix.lower() in extensions]
+
+    if not image_files:
+        logger.warning(f"No image files found in {folder_path}")
+        return
+
+    logger.info(f"Found {len(image_files)} images to process")
+
+    for image_path in image_files:
+        logger.info(f"Processing {image_path}")
+        process_image(image_path, output_dir)
+
+    logger.info(f"Finished processing all images. Output saved to {output_dir}")
+
+
+def main():
+    """Command-line interface for the image quartering tool."""
+    fire.Fire(split_images)
+
+
+if __name__ == "__main__":
+    main()

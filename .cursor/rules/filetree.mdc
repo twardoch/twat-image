@@ -16,7 +16,7 @@ globs:
 │       └── [1.4K]  release.yml
 ├── [3.5K]  .gitignore
 ├── [ 470]  .pre-commit-config.yaml
-├── [ 987]  CLEANUP.txt
+├── [ 987]  llms.txt
 ├── [1.0K]  LICENSE
 ├── [1.7K]  LOG.md
 ├── [ 812]  README.md

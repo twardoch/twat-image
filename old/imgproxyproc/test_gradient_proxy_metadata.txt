@@ -1,0 +1,6 @@
+original_path=test_gradient.png
+original_width=2000
+original_height=1500
+proxy_width=512
+proxy_height=512
+proxy_path=test_gradient_proxy.png

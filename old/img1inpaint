@@ -1,0 +1,71 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# dependencies = ["openai", "python-dotenv", "fire"]
+# ///
+# this_file: ~/bin/img/img1inpaint.py
+
+import base64
+from pathlib import Path
+
+from openai import OpenAI
+from dotenv import load_dotenv
+from fire import Fire
+
+load_dotenv()
+
+client = OpenAI()
+
+
+def main(
+    input_image: str | Path,
+    mask_image: str | Path,
+    prompt: str,
+    output_image: str | Path | None = None,
+):
+    """Inpaint an image using GPT Image 1.
+
+    Args:
+        input_image: Path to the input image
+        mask_image: Path to the mask image (white areas will be replaced)
+        prompt: Text description of what to generate in the masked areas
+        output_image: Path to save the resulting image (if not provided,
+                      will use input_image name with "_inpainted" suffix)
+    """
+    # Convert input paths to Path objects
+    input_path = Path(input_image)
+
+    output_image = (
+        Path(output_image)
+        if output_image
+        else input_path.with_stem(f"{input_path.stem}_inpainted")
+    )
+
+    result = client.images.edit(
+        model="gpt-image-1",
+        image=open(input_path, "rb"),
+        mask=open(Path(mask_image), "rb"),
+        prompt=prompt,
+    )
+
+    # Check if b64_json is available in the response
+    if hasattr(result, "data") and result.data and hasattr(result.data[0], "b64_json"):
+        image_base64 = result.data[0].b64_json
+        if image_base64:
+            image_bytes = base64.b64decode(image_base64)
+
+            # Save the image to a file
+            with open(output_image, "wb") as f:
+                f.write(image_bytes)
+            print(f"Image saved as {output_image}")
+        else:
+            print("No base64 image data received")
+    else:
+        # Check if URL is available instead
+        if hasattr(result, "data") and result.data and hasattr(result.data[0], "url"):
+            print(f"Image URL: {result.data[0].url}")
+        else:
+            print("Unexpected response format:", result)
+
+
+if __name__ == "__main__":
+    Fire(main)

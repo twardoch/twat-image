@@ -1,0 +1,221 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# dependencies = ["fire", "rich", "pillow", "numpy", "numba"]
+# ///
+# this_file: ~/bin/img/imgsort4.py
+
+import shutil
+from pathlib import Path
+
+import fire
+import numba
+import numpy as np
+from PIL import Image
+from rich.console import Console
+from rich.progress import Progress
+
+console = Console()
+
+
+def load_and_downsample(
+    img_path: Path,
+    downscale_factor: int = 4,
+    target_size: tuple[int, int] | None = (512, 512),
+) -> tuple[np.ndarray, int, int]:
+    """Load and downsample an image."""
+    try:
+        with Image.open(img_path) as im:
+            im = im.convert("RGB")
+            if target_size is not None:
+                width, height = target_size
+            else:
+                width = im.size[0] // downscale_factor
+                height = im.size[1] // downscale_factor
+            im = im.resize((width, height), Image.Resampling.LANCZOS)
+            return np.array(im, dtype=np.float32), width, height
+    except Exception as e:
+        console.print(f"[red]Error processing {img_path}: {e!s}[/red]")
+        raise
+
+
+@numba.njit(nogil=True, cache=True)
+def compute_grayscale_brightness(rgb_array: np.ndarray) -> float:
+    """Compute average brightness using optimized loops."""
+    h, w = rgb_array.shape[:2]
+    total = 0.0
+    for i in range(h):
+        for j in range(w):
+            r = rgb_array[i, j, 0]
+            g = rgb_array[i, j, 1]
+            b = rgb_array[i, j, 2]
+            total += 0.299 * r + 0.587 * g + 0.114 * b
+    return total / (h * w)
+
+
+def get_image_files(input_path: Path) -> list[Path]:
+    """Get all supported image files from directory."""
+    extensions = {".png", ".jpg", ".jpeg"}
+    return sorted(
+        p
+        for p in input_path.iterdir()
+        if p.is_file() and p.suffix.lower() in extensions
+    )
+
+
+def compute_pairwise_distances(
+    images: list[np.ndarray],
+    progress: Progress,
+    total: int,
+) -> np.ndarray:
+    """
+    Compute pairwise MSE distances using a vectorized approach.
+
+    Instead of a triple-nested loop, we flatten the images into a 2D
+    array of shape (n, h*w*c). Euclidean distance between two flattened
+    vectors a and b can be computed quickly via:
+
+        sq(a - b) = a·a + b·b - 2(a·b)
+    """
+    n = len(images)
+
+    # Stack images (n, height, width, channels) => (n, h*w*c)
+    # All images have the same shape due to your downsampling strategy.
+    images_4d = np.stack(images)
+    h, w, c = images_4d.shape[1:]  # e.g., (512, 512, 3)
+    images_2d = images_4d.reshape(n, -1)  # shape: (n, h*w*c)
+
+    # Sum of squares for each image row
+    sum_of_squares = np.einsum("ij,ij->i", images_2d, images_2d)  # shape: (n,)
+
+    # Pairwise distances (squared)
+    # dist_sq[i, j] = ||images_2d[i] - images_2d[j]||^2
+    #                = sum_of_squares[i] + sum_of_squares[j] - 2 * (images_2d[i] · images_2d[j])
+    dist_sq = (
+        sum_of_squares[:, None]
+        + sum_of_squares[None, :]
+        - 2.0 * (images_2d @ images_2d.T)
+    )
+
+    # Convert to MSE by dividing by the number of elements per image
+    num_pixels = float(h * w * c)
+    distance_matrix = dist_sq / num_pixels
+
+    return distance_matrix
+
+
+def find_nearest_neighbor_path(
+    distance_matrix: np.ndarray,
+    start_idx: int,
+    progress: Progress,
+) -> list[int]:
+    """Find path visiting all images starting from given index
+    via a simple nearest-neighbor heuristic."""
+    n = len(distance_matrix)
+    unvisited: set[int] = set(range(n))
+    path: list[int] = [start_idx]
+    current = start_idx
+    unvisited.remove(current)
+
+    task = progress.add_task("Finding path...", total=n - 1)
+
+    while unvisited:
+        next_idx = min(unvisited, key=lambda x: distance_matrix[current, x])
+        path.append(next_idx)
+        unvisited.remove(next_idx)
+        current = next_idx
+        progress.advance(task)
+
+    return path
+
+
+def cli(input_folder: str | Path, rename: bool = False) -> None:
+    """Sort image files by visual similarity."""
+    input_path = Path(input_folder)
+    if not input_path.exists():
+        console.print("[red]Error: Input folder does not exist[/red]")
+        return
+
+    image_paths = get_image_files(input_path)
+    if not image_paths:
+        console.print("[yellow]No image files found[/yellow]")
+        return
+
+    n = len(image_paths)
+    console.print(f"Processing {n} image files...")
+
+    # Determine target size from the first image
+    try:
+        with Image.open(image_paths[0]) as first_img:
+            w, h = first_img.size
+            target_size = (w // 4, h // 4)  # You can adjust the downscale strategy
+    except Exception as e:
+        console.print(f"[red]Error reading first image: {e!s}[/red]")
+        return
+
+    # Load and downsample images
+    images: list[np.ndarray] = []
+    dimensions: list[tuple[int, int]] = []
+    with Progress() as progress:
+        task = progress.add_task("Loading images...", total=n)
+        for path in image_paths:
+            try:
+                img, w, h = load_and_downsample(path, target_size=target_size)
+                images.append(img)
+                dimensions.append((w, h))
+                progress.advance(task)
+            except Exception:
+                continue
+
+    if not images:
+        console.print("[red]No valid images could be processed[/red]")
+        return
+
+    # Compute brightness values to pick a starting image (darkest)
+    brightness_values = [compute_grayscale_brightness(img) for img in images]
+    darkest_index = int(np.argmin(brightness_values))
+
+    # Compute distance matrix using our vectorized approach
+    with Progress() as progress:
+        total_comparisons = (n * (n - 1)) // 2
+        progress.add_task("Computing distances...", total=total_comparisons)
+        distance_matrix = compute_pairwise_distances(
+            images, progress, total_comparisons
+        )
+
+    # Find nearest neighbor path from the darkest image
+    with Progress() as progress:
+        path = find_nearest_neighbor_path(distance_matrix, darkest_index, progress)
+
+    # Handle renaming/output
+    width_digits = len(str(n))
+    if rename:
+        console.print("\nRenaming files...")
+        new_names: list[Path] = []
+        for i, idx in enumerate(path, start=1):
+            old_path = image_paths[idx]
+            dims = dimensions[idx]
+            new_name = (
+                input_path
+                / f"{i:0{width_digits}d}--{old_path.stem}-{dims[0]}x{dims[1]}{old_path.suffix}"
+            )
+            new_names.append(new_name)
+
+        try:
+            with Progress() as progress:
+                task = progress.add_task("Renaming...", total=n)
+                paths_to_rename = [image_paths[i] for i in path]
+                for old_path, new_name in zip(paths_to_rename, new_names, strict=False):
+                    shutil.move(old_path, new_name)
+                    progress.advance(task)
+            console.print("[green]Successfully renamed all files![/green]")
+        except Exception as e:
+            console.print(f"[red]Error during renaming: {e!s}[/red]")
+    else:
+        console.print("\nSorted order:")
+        for i, idx in enumerate(path, start=1):
+            name = image_paths[idx].name
+            console.print(f"{i:>{width_digits}} {name}")
+
+
+if __name__ == "__main__":
+    fire.Fire(cli)

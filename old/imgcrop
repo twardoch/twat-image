@@ -1,0 +1,174 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# dependencies = ["fire", "pillow", "rich", "loguru"]
+# ///
+# this_file: imgcrop
+
+import re
+import os
+from typing import Optional, Tuple, List
+import fire
+from PIL import Image
+from rich.console import Console
+from loguru import logger
+
+console = Console()
+
+PERFECT_RATIOS = [
+    (2, 1),  # 2:1
+    (16, 9),  # 16:9
+    (3, 2),  # 3:2
+    (1, 1),  # 1:1
+    (2, 3),  # 2:3
+    (9, 16),  # 9:16
+    (1, 2),  # 1:2
+]
+
+
+def parse_dimension(dim_str: str) -> Tuple[int, int]:
+    """Parse dimension string in format 'WIDTHxHEIGHT' or 'WIDTH:HEIGHT'."""
+    if not dim_str:
+        return (0, 0)
+
+    match = re.match(r"(\d+)[x:](\d+)", dim_str)
+    if not match:
+        raise ValueError(
+            f"Invalid dimension format: {dim_str}. Use 'WIDTHxHEIGHT' or 'WIDTH:HEIGHT'"
+        )
+
+    return (int(match.group(1)), int(match.group(2)))
+
+
+def find_nearest_ratio(width: int, height: int) -> Tuple[int, int]:
+    """Find the nearest perfect ratio from the predefined list."""
+    current_ratio = width / height
+
+    # Calculate how close each perfect ratio is to the current ratio
+    differences = [(abs(current_ratio - (w / h)), (w, h)) for w, h in PERFECT_RATIOS]
+
+    # Return the ratio with the smallest difference
+    return min(differences, key=lambda x: x[0])[1]
+
+
+def calculate_crop_box(
+    img_width: int,
+    img_height: int,
+    target_width: int = 0,
+    target_height: int = 0,
+    ratio_width: int = 0,
+    ratio_height: int = 0,
+) -> Tuple[int, int, int, int]:
+    """
+    Calculate the crop box (left, top, right, bottom) for the image.
+
+    If target dimensions are provided, use those to calculate the crop.
+    If ratio is provided, maintain that aspect ratio.
+    If neither is provided, find the nearest perfect ratio.
+    """
+    # If neither px nor ratio specified, find nearest perfect ratio
+    if (
+        target_width == 0
+        and target_height == 0
+        and ratio_width == 0
+        and ratio_height == 0
+    ):
+        ratio_width, ratio_height = find_nearest_ratio(img_width, img_height)
+        logger.info(f"Selected nearest perfect ratio: {ratio_width}:{ratio_height}")
+
+    # If only ratio is specified, use it
+    if (
+        target_width == 0
+        and target_height == 0
+        and (ratio_width > 0 and ratio_height > 0)
+    ):
+        target_ratio = ratio_width / ratio_height
+
+        # Calculate dimensions while maintaining the requested ratio
+        if img_width / img_height > target_ratio:
+            # Image is wider than the target ratio
+            new_width = int(img_height * target_ratio)
+            new_height = img_height
+        else:
+            # Image is taller than the target ratio
+            new_width = img_width
+            new_height = int(img_width / target_ratio)
+    else:
+        # If px is specified, use those dimensions directly
+        new_width = target_width if target_width > 0 else img_width
+        new_height = target_height if target_height > 0 else img_height
+
+    # Ensure dimensions don't exceed original image
+    new_width = min(new_width, img_width)
+    new_height = min(new_height, img_height)
+
+    # Calculate crop box coordinates
+    left = (img_width - new_width) // 2
+    top = (img_height - new_height) // 2
+    right = left + new_width
+    bottom = top + new_height
+
+    return (left, top, right, bottom)
+
+
+def crop_image(
+    input: str,
+    output: Optional[str] = None,
+    px: str = "",
+    ratio: str = "",
+    verbose: bool = False,
+) -> None:
+    """
+    Crop an image to specified dimensions or ratio.
+
+    Args:
+        input: Path to input image
+        output: Path to output image (if not specified, overwrites input)
+        px: Pixel dimensions in format 'WIDTHxHEIGHT' or 'WIDTH:HEIGHT'
+        ratio: Aspect ratio in format 'WIDTHxHEIGHT' or 'WIDTH:HEIGHT'
+        verbose: Enable verbose logging
+    """
+    # Setup logging
+    logger.remove()
+    log_level = "DEBUG" if verbose else "INFO"
+    logger.add(lambda msg: console.print(msg, highlight=False), level=log_level)
+
+    logger.info(f"Processing image: {input}")
+
+    try:
+        # Open the image
+        img = Image.open(input)
+        img_width, img_height = img.size
+        logger.debug(f"Original image dimensions: {img_width}x{img_height}")
+
+        # Parse dimensions
+        target_width, target_height = parse_dimension(px)
+        ratio_width, ratio_height = parse_dimension(ratio)
+
+        # Calculate crop box
+        left, top, right, bottom = calculate_crop_box(
+            img_width,
+            img_height,
+            target_width,
+            target_height,
+            ratio_width,
+            ratio_height,
+        )
+
+        logger.debug(f"Crop box: ({left}, {top}, {right}, {bottom})")
+
+        # Crop the image
+        cropped_img = img.crop((left, top, right, bottom))
+        logger.debug(f"New dimensions: {cropped_img.width}x{cropped_img.height}")
+
+        # Save the image
+        output_path = output or input
+        cropped_img.save(output_path, quality=95)
+        logger.info(f"Saved cropped image to: {output_path}")
+
+    except Exception as e:
+        logger.error(f"Error processing image: {str(e)}")
+        raise
+
+
+if __name__ == "__main__":
+    fire.Fire(crop_image)

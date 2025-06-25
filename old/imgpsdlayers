@@ -1,0 +1,86 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# dependencies = ["fire", "rich", "psd-tools"]
+# ///
+# this_file: ~/bin/img/imgpsdlayers.py
+
+import fnmatch
+import logging
+import os
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+import fire
+from psd_tools import PSDImage
+from rich.console import Console
+from rich.progress import (
+    BarColumn,
+    Progress,
+    SpinnerColumn,
+    TaskProgressColumn,
+    TextColumn,
+)
+
+logging.getLogger("psd_tools").setLevel(logging.ERROR)
+logging.getLogger("psd_tools.psd.tagged_blocks").setLevel(logging.ERROR)
+console = Console()
+
+
+def search_layers(file_path, substring):
+    psd = PSDImage.open(file_path)
+    matching_layers = []
+    for layer in psd:
+        if substring is None or substring.lower() in layer.name.lower():
+            matching_layers.append(layer.name)
+    if substring is None or matching_layers:
+        console.print("-------------")
+        console.print(f"[cyan]{file_path.absolute()}[/cyan]")
+        for layer_name in matching_layers:
+            console.print(f"- {layer_name}")
+        console.print("-------------")
+        console.print()
+
+
+def find_files_and_search_layers(input_path, substring, jpegs=False):
+    with ThreadPoolExecutor() as executor:
+        futures = []
+        for root, _, files in os.walk(input_path):
+            for filename in fnmatch.filter(files, "*.psd"):
+                file_path = os.path.join(root, filename)
+                futures.append(executor.submit(search_layers, file_path, substring))
+            if jpegs:
+                for filename in fnmatch.filter(files, "*.jpg"):
+                    file_path = os.path.join(root, filename)
+                    futures.append(executor.submit(search_layers, file_path, substring))
+
+        for future in futures:
+            future.result()
+
+
+def print_psd_layers(input_folder=None, substring=None, jpegs=False):
+    if input_folder is None:
+        input_folder = input("PSD input folder: ")
+    if substring is None:
+        substring = input("String in PSD layer name: ")
+
+    input_path = Path(input_folder)
+    if not input_path.exists() or not input_path.is_dir():
+        console.print(f"[red]Invalid input folder: {input_folder}[/red]")
+        return
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
+    ) as progress:
+        search_task = progress.add_task(
+            "[green]Searching files and layers...", total=None
+        )
+        find_files_and_search_layers(input_path, substring, jpegs)
+        progress.update(search_task, total=1)
+
+
+if __name__ == "__main__":
+    fire.Fire(print_psd_layers)

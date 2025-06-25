@@ -1,0 +1,718 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# dependencies = ["pillow", "psd-tools", "fire", "rich"]
+# ///
+# this_file: imgs2layers.py
+
+"""
+imgs2layers - Create layered PSD files from multiple images with advanced options
+
+OVERVIEW:
+---------
+This tool takes multiple images and creates a layered Photoshop PSD file where each
+image becomes a separate layer. A transparent "Background" layer is automatically
+created as the bottom-most layer. The tool provides extensive control over canvas
+dimensions, layer opacity, and layer positioning.
+
+FEATURES:
+---------
+1. Canvas Size Options:
+   - Use dimensions of first image (default)
+   - Use smallest dimensions across all images
+   - Use largest dimensions across all images
+   - Specify custom dimensions directly (width;height or width,height)
+
+2. Layer Positioning:
+   - Top-left alignment (default): Layers positioned at coordinates (0,0)
+   - Centered alignment: Layers centered in the canvas with --center option
+   - Custom offsets: Each layer can have custom x,y positioning
+
+3. Layer Properties:
+   - Automatic transparent background layer
+   - Layer names derived from filenames (without file extensions)
+   - Customizable opacity for each layer (0-100% or 255 = 100%)
+   - Custom position offsets for precise layer placement
+
+4. Input Format Flexibility:
+   - Basic: Just provide image paths for default opacity and positioning
+   - Advanced: Specify opacity and position offsets using parameter syntax
+   - Support for both semicolon and comma separators
+
+INPUT SYNTAX:
+------------
+Each input image can use one of the following formats:
+
+  imagepath[;,opacity][;,x_offset][;,y_offset]
+
+Where:
+  - imagepath: Path to the source image file
+  - opacity: Layer opacity in percent (0-100) or 255 for 100% (optional)
+  - x_offset: Horizontal offset in pixels (optional)
+  - y_offset: Vertical offset in pixels (optional)
+
+Separator can be either semicolon (;) or comma (,). Using comma syntax without
+quotes will work as arguments are automatically parsed correctly.
+
+POSITION COORDINATES:
+--------------------
+When --center is NOT used (default):
+  - (0,0) is the top-left corner
+  - Positive X moves right
+  - Positive Y moves down
+
+When --center IS used:
+  - (0,0) is the center of the canvas
+  - Positive X moves right from center
+  - Positive Y moves down from center
+  - Negative X moves left from center
+  - Negative Y moves up from center
+
+CANVAS SIZE OPTION:
+------------------
+The --size parameter accepts:
+  - "first": Use dimensions of first input image (default)
+  - "min": Use smallest dimensions across all input images
+  - "max": Use largest dimensions across all input images
+  - "width;height" or "width,height": Specify exact dimensions in pixels
+
+USAGE EXAMPLES:
+--------------
+Basic usage (uses dimensions of first image, places layers at top-left):
+  python imgs2layers2.py image1.jpg image2.jpg
+
+Set layer opacity:
+  python imgs2layers2.py "image1.jpg;50" "image2.jpg;75"
+
+Position layers with offsets (format: image;opacity;x;y):
+  python imgs2layers2.py "image1.jpg;100;20;30" "image2.jpg;80;-10;15"
+
+Center all layers:
+  python imgs2layers2.py image1.jpg image2.jpg --center
+
+Specify custom canvas size:
+  python imgs2layers2.py image1.jpg image2.jpg --size "2000;1500"
+
+Using comma separator (no quotes needed):
+  python imgs2layers2.py image1.jpg,50,20,30 image2.jpg,80,-10,15
+
+Use maximum dimensions across all input images:
+  python imgs2layers2.py image1.jpg image2.jpg --size max
+
+Custom output path:
+  python imgs2layers2.py image1.jpg image2.jpg --output my_layered_file.psd
+
+Show detailed information (including layer properties in generated PSD):
+  python imgs2layers2.py image1.jpg image2.jpg --verbose
+"""
+
+from enum import Enum
+from pathlib import Path
+from typing import NamedTuple
+
+from PIL import Image
+from psd_tools import PSDImage
+from psd_tools.api.layers import PixelLayer
+import fire
+from rich.console import Console
+from rich.progress import track
+from rich.table import Table
+from rich.tree import Tree
+from rich.panel import Panel
+
+# Initialize rich console for pretty output
+console = Console()
+
+
+class SizeOption(str, Enum):
+    """Options for determining the canvas size."""
+
+    FIRST = "first"
+    MIN = "min"
+    MAX = "max"
+    CUSTOM = "custom"  # For custom dimensions specified directly
+
+
+class LayerParams(NamedTuple):
+    """Parameters for a layer in the PSD file."""
+
+    image_path: str
+    opacity: float = 100.0  # Default 100% opacity
+    x_offset: int = 0  # Default no horizontal offset
+    y_offset: int = 0  # Default no vertical offset
+
+
+def parse_dimensions(size_str: str) -> tuple[int, int]:
+    """
+    Parse dimensions from a string in the format 'width;height' or 'width,height'.
+
+    Args:
+        size_str: Dimension string in the format 'width;height' or 'width,height'
+
+    Returns:
+        Tuple of (width, height)
+
+    Raises:
+        ValueError: If the string format is invalid or dimensions are not positive integers
+    """
+    # Determine the separator (prefer ";" if present)
+    separator = ";" if ";" in size_str else ","
+
+    try:
+        # Split the string and convert to integers
+        parts = size_str.split(separator)
+        if len(parts) != 2:
+            raise ValueError(
+                f"Expected 'width{separator}height' format, got '{size_str}'"
+            )
+
+        width = int(parts[0].strip())
+        height = int(parts[1].strip())
+
+        # Validate dimensions
+        if width <= 0 or height <= 0:
+            raise ValueError(
+                f"Width and height must be positive integers, got {width}x{height}"
+            )
+
+        return width, height
+    except ValueError as e:
+        # Re-raise with more context if it's not our custom message
+        if str(e).startswith("Expected") or str(e).startswith("Width"):
+            raise
+        raise ValueError(
+            f"Invalid dimension format '{size_str}'. Expected 'width{separator}height' with positive integers."
+        )
+
+
+def get_image_dimensions(
+    image_paths: list[str],
+    size_option: SizeOption,
+    custom_dimensions: tuple[int, int] | None = None,
+) -> tuple[int, int]:
+    """
+    Determine the canvas dimensions based on the size option.
+
+    Args:
+        image_paths: List of paths to input images
+        size_option: How to determine the canvas size (first, min, max, or custom)
+        custom_dimensions: Custom dimensions to use if size_option is CUSTOM
+
+    Returns:
+        Tuple of (width, height) for the canvas
+    """
+    # For custom dimensions, use the provided values
+    if size_option == SizeOption.CUSTOM:
+        if custom_dimensions is None:
+            raise ValueError(
+                "Custom dimensions must be provided when using 'custom' size option"
+            )
+        return custom_dimensions
+
+    # Get dimensions of all images
+    dimensions = []
+
+    for path in image_paths:
+        try:
+            with Image.open(path) as img:
+                dimensions.append(img.size)
+        except Exception as e:
+            console.print(
+                f"[yellow]Warning:[/yellow] Failed to get dimensions of '{path}': {e}"
+            )
+            continue
+
+    if not dimensions:
+        raise ValueError("Could not determine dimensions from any of the input images")
+
+    # Determine canvas size based on the selected option
+    match size_option:
+        case SizeOption.FIRST:
+            return dimensions[0]
+        case SizeOption.MIN:
+            min_width = min(dim[0] for dim in dimensions)
+            min_height = min(dim[1] for dim in dimensions)
+            return min_width, min_height
+        case SizeOption.MAX:
+            max_width = max(dim[0] for dim in dimensions)
+            max_height = max(dim[1] for dim in dimensions)
+            return max_width, max_height
+        case _:
+            # Default to first image if an invalid option is provided
+            return dimensions[0]
+
+
+def create_background_layer(psd: PSDImage, width: int, height: int) -> None:
+    """
+    Create a transparent background layer and add it to the PSD.
+
+    Args:
+        psd: The PSD image to add the background layer to
+        width: Width of the background layer
+        height: Height of the background layer
+    """
+    # Create a fully transparent image
+    bg_image = Image.new("RGBA", (width, height), (0, 0, 0, 0))
+
+    # Create a new layer from the image
+    bg_layer = PixelLayer.frompil(bg_image, psd_file=psd, layer_name="Background")
+
+    # Add layer to the bottom of the stack
+    psd.insert(0, bg_layer)
+    console.print("[green]Added transparent 'Background' layer[/green]")
+
+
+def get_layer_name(image_path: str) -> str:
+    """
+    Extract layer name from image path (without extension).
+
+    Args:
+        image_path: Path to the image file
+
+    Returns:
+        Layer name without file extension
+    """
+    return Path(image_path).stem
+
+
+def parse_layer_input(input_value: str | tuple) -> LayerParams:
+    """
+    Parse a layer input into a LayerParams object.
+
+    Supports the following formats:
+    - imagepath
+    - imagepath;opacity
+    - imagepath;opacity;x
+    - imagepath;opacity;x;y
+
+    Or equivalent comma-separated formats that may be parsed as tuples by Fire.
+
+    Args:
+        input_value: Layer input as a string or tuple (if Fire parsed a comma-separated string)
+
+    Returns:
+        LayerParams object with the parsed values
+    """
+    # If input is a tuple (happens when comma is used in command line args),
+    # convert it to a comma-separated string
+    if isinstance(input_value, tuple):
+        # Convert all elements to strings and join with commas
+        input_str = ",".join(str(item) for item in input_value)
+    else:
+        input_str = str(input_value)
+
+    # Determine the separator (prefer ";" if present)
+    separator = ";" if ";" in input_str else ","
+
+    # Split the input string
+    parts = input_str.split(separator)
+
+    # Extract image path (mandatory)
+    image_path = parts[0].strip()
+
+    # Set defaults
+    opacity = 100.0
+    x_offset = 0
+    y_offset = 0
+
+    # Parse additional parameters if provided
+    if len(parts) > 1 and parts[1].strip():
+        # Handle opacity (can be 0-100 or 255)
+        try:
+            opacity_value = float(parts[1].strip())
+            # If the value is 255, treat it as 100%
+            if opacity_value == 255:
+                opacity = 100.0
+            else:
+                # Ensure opacity is between 0 and 100
+                opacity = max(0.0, min(100.0, opacity_value))
+        except ValueError:
+            console.print(
+                f"[yellow]Warning:[/yellow] Invalid opacity value '{parts[1]}'. Using default 100%."
+            )
+
+    if len(parts) > 2 and parts[2].strip():
+        # Handle x offset
+        try:
+            x_offset = int(parts[2].strip())
+        except ValueError:
+            console.print(
+                f"[yellow]Warning:[/yellow] Invalid x offset '{parts[2]}'. Using default 0."
+            )
+
+    if len(parts) > 3 and parts[3].strip():
+        # Handle y offset
+        try:
+            y_offset = int(parts[3].strip())
+        except ValueError:
+            console.print(
+                f"[yellow]Warning:[/yellow] Invalid y offset '{parts[3]}'. Using default 0."
+            )
+
+    return LayerParams(image_path, opacity, x_offset, y_offset)
+
+
+def position_image(
+    img: Image.Image,
+    canvas_width: int,
+    canvas_height: int,
+    center: bool,
+    x_offset: int = 0,
+    y_offset: int = 0,
+) -> Image.Image:
+    """
+    Position the image on the canvas according to the positioning option and offsets.
+
+    Args:
+        img: The source image
+        canvas_width: Width of the canvas
+        canvas_height: Height of the canvas
+        center: Whether to center the image on the canvas
+        x_offset: Horizontal offset in pixels
+        y_offset: Vertical offset in pixels
+
+    Returns:
+        The positioned image on a canvas of the specified dimensions
+    """
+    # Create a new transparent canvas
+    canvas = Image.new("RGBA", (canvas_width, canvas_height), (0, 0, 0, 0))
+
+    # Calculate position for pasting
+    if center:
+        # Center the image with optional offsets
+        # When centered, x_offset and y_offset are relative to the center
+        paste_x = max(0, (canvas_width - img.width) // 2 + x_offset)
+        paste_y = max(0, (canvas_height - img.height) // 2 + y_offset)
+    else:
+        # Top-left alignment (0,0) with optional offsets
+        paste_x = max(0, x_offset)
+        paste_y = max(0, y_offset)
+
+    # Ensure image fits within canvas (crop if necessary)
+    img_to_paste = img.crop(
+        (
+            0,
+            0,
+            min(img.width, canvas_width - paste_x),
+            min(img.height, canvas_height - paste_y),
+        )
+    )
+
+    # Paste the image onto the canvas
+    canvas.paste(img_to_paste, (paste_x, paste_y))
+    return canvas
+
+
+def display_psd_info(psd_path: str) -> None:
+    """
+    Read a PSD file and display detailed information about it using rich formatting.
+
+    Args:
+        psd_path: Path to the PSD file to analyze
+    """
+    console.print(f"\n[bold blue]Analyzing PSD file:[/bold blue] {psd_path}")
+
+    # Check if the file exists
+    if not Path(psd_path).exists():
+        console.print(
+            f"[bold red]Error:[/bold red] PSD file '{psd_path}' does not exist"
+        )
+        return
+
+    try:
+        # Open the PSD file
+        console.print("[yellow]Opening PSD file...[/yellow]")
+        psd = PSDImage.open(psd_path)
+        console.print("[green]Successfully opened PSD file[/green]")
+
+        # Create a panel for PSD header information
+        console.print("[yellow]Gathering PSD header information...[/yellow]")
+        header_table = Table(title="PSD Header Information")
+        header_table.add_column("Property", style="cyan")
+        header_table.add_column("Value", style="green")
+
+        # Add basic PSD information with safer access
+        try:
+            header_table.add_row("Canvas Size", f"{psd.width} × {psd.height} pixels")
+        except Exception as e:
+            header_table.add_row("Canvas Size", f"Error: {str(e)}")
+
+        try:
+            header_table.add_row("Color Mode", str(psd.color_mode))
+        except Exception as e:
+            header_table.add_row("Color Mode", f"Error: {str(e)}")
+
+        try:
+            header_table.add_row("Bit Depth", str(psd.depth))
+        except Exception as e:
+            header_table.add_row("Bit Depth", f"Error: {str(e)}")
+
+        try:
+            header_table.add_row("Channels", str(psd.channels))
+        except Exception as e:
+            header_table.add_row("Channels", f"Error: {str(e)}")
+
+        try:
+            header_table.add_row("Layer Count", str(len(psd)))
+        except Exception as e:
+            header_table.add_row("Layer Count", f"Error: {str(e)}")
+
+        # Display the header information
+        console.print(
+            Panel(
+                header_table,
+                title=f"PSD File: [bold blue]{Path(psd_path).name}[/bold blue]",
+            )
+        )
+
+        # Create a tree view for layer structure
+        console.print("[yellow]Building layer structure...[/yellow]")
+        layer_tree = Tree("[bold]Layer Structure[/bold]")
+
+        # Add layers in reverse order (top to bottom as seen in Photoshop)
+        try:
+            for i, layer in enumerate(reversed(psd)):
+                try:
+                    layer_info = f"[bold]{layer.name}[/bold]"
+                    if hasattr(layer, "width") and hasattr(layer, "height"):
+                        layer_info += f" ({layer.width}×{layer.height})"
+
+                    layer_node = layer_tree.add(layer_info)
+
+                    # Add layer properties
+                    if hasattr(layer, "opacity"):
+                        layer_node.add(f"Opacity: {layer.opacity}")
+                    if hasattr(layer, "visible"):
+                        layer_node.add(f"Visible: {'Yes' if layer.visible else 'No'}")
+                    if hasattr(layer, "blend_mode"):
+                        layer_node.add(f"Blend Mode: {layer.blend_mode}")
+
+                    # Add layer position information if applicable
+                    if hasattr(layer, "left") and hasattr(layer, "top"):
+                        layer_node.add(f"Position: ({layer.left}, {layer.top})")
+                except Exception as layer_err:
+                    layer_tree.add(
+                        f"[red]Error processing layer {i}: {str(layer_err)}[/red]"
+                    )
+
+            # Display the layer structure
+            console.print(layer_tree)
+        except Exception as layers_err:
+            console.print(f"[bold red]Error processing layers:[/bold red] {layers_err}")
+
+        console.print("[green]PSD analysis complete[/green]")
+
+    except Exception as e:
+        console.print(f"[bold red]Error reading PSD file:[/bold red] {e}")
+        # Print the exception traceback for debugging
+        import traceback
+
+        console.print("[dim]" + traceback.format_exc() + "[/dim]")
+
+
+def create_layered_image(
+    *image_inputs: str | tuple,
+    output: str | None = None,
+    center: bool = False,
+    size: str | tuple = "first",
+    verbose: bool = False,
+) -> str:
+    """
+    Create a layered PSD file from multiple images with advanced control options.
+
+    This tool combines multiple images into a single layered PSD file. It creates a transparent
+    "Background" layer automatically and allows precise control over layer opacity and positioning.
+
+    Each image input can be specified in one of the following formats:
+    - imagepath
+    - imagepath;opacity
+    - imagepath;opacity;x
+    - imagepath;opacity;x;y
+
+    Where:
+    - opacity: Layer opacity as percentage (0-100) or 255 for 100%
+    - x: Horizontal offset in pixels (0=left, or center if --center is used)
+    - y: Vertical offset in pixels (0=top, or center if --center is used)
+
+    Canvas size options:
+    - "first": Use dimensions of first image (default)
+    - "min": Use smallest dimensions across all images
+    - "max": Use largest dimensions across all images
+    - "width;height" or "width,height": Use custom dimensions in pixels
+
+    Args:
+        *image_inputs: Input strings for layers in one of the supported formats
+        output: Output path for the PSD file (default: derives from first image)
+        center: Whether to center images on the canvas (default: False)
+        size: Canvas size determination method (default: "first")
+        verbose: Whether to print detailed progress information (default: False)
+
+    Returns:
+        Path to the created PSD file
+
+    Examples:
+        python imgs2layers2.py image1.jpg image2.jpg
+        python imgs2layers2.py "image1.jpg;50" "image2.jpg;75" --center --size max
+        python imgs2layers2.py image.jpg,100,50,20 --size "2000;1500" --verbose
+    """
+    # Validate input
+    if not image_inputs:
+        raise ValueError("At least one image input is required")
+
+    # Parse layer parameters from the input strings
+    layer_params = [parse_layer_input(input_value) for input_value in image_inputs]
+
+    # Extract just the image paths for dimension calculation
+    image_paths = [params.image_path for params in layer_params]
+
+    # Handle size parameter
+    # First, convert to string if it's a tuple (happens when comma is used in command line)
+    if isinstance(size, tuple) and len(size) == 2:
+        # Fire interprets "1000,2000" as a tuple of (1000, 2000)
+        size_str = f"{size[0]},{size[1]}"
+        if verbose:
+            console.print(f"Converting size tuple {size} to string: '{size_str}'")
+        size = size_str
+    elif not isinstance(size, str):
+        # Convert any other non-string value to string
+        size = str(size)
+
+    # Check if size parameter contains custom dimensions
+    custom_dimensions = None
+    size_option = None
+
+    # Check if size contains a separator indicating custom dimensions
+    if ";" in size or "," in size:
+        try:
+            custom_dimensions = parse_dimensions(size)
+            size_option = SizeOption.CUSTOM
+            if verbose:
+                console.print(
+                    f"Using custom canvas dimensions: [bold]{custom_dimensions[0]}x{custom_dimensions[1]}[/bold]"
+                )
+        except ValueError as e:
+            console.print(f"[bold red]Error parsing custom dimensions:[/bold red] {e}")
+            console.print("[yellow]Falling back to 'first' size option.[/yellow]")
+            size = "first"  # Fall back to default
+
+    # If not custom dimensions, convert size parameter to enum
+    if size_option is None:
+        try:
+            size_option = SizeOption(size.lower())
+        except ValueError:
+            valid_options = ", ".join(
+                [s.value for s in SizeOption if s != SizeOption.CUSTOM]
+            )
+            console.print(
+                f"[bold red]Invalid size option:[/bold red] '{size}'. "
+                f"Must be one of: {valid_options}, or 'width;height'."
+            )
+            console.print("[yellow]Falling back to 'first' size option.[/yellow]")
+            size_option = SizeOption.FIRST
+
+    # Determine canvas dimensions
+    canvas_width, canvas_height = get_image_dimensions(
+        image_paths, size_option, custom_dimensions
+    )
+
+    if verbose:
+        console.print(f"Canvas dimensions: [bold]{canvas_width}x{canvas_height}[/bold]")
+        console.print(
+            f"Positioning mode: [bold]{'Centered' if center else 'Top-left (0,0)'}[/bold]"
+        )
+
+    # Determine the output path
+    if output is None:
+        base_image_path = image_paths[0]
+        output_file_path = f"{Path(base_image_path).stem}-layers.psd"
+    else:
+        output_file_path = (
+            output if output.lower().endswith(".psd") else f"{output}.psd"
+        )
+
+    # Create a new PSD with the determined dimensions
+    psd = PSDImage.new(mode="RGBA", size=(canvas_width, canvas_height))
+
+    # Add a transparent background layer
+    create_background_layer(psd, canvas_width, canvas_height)
+
+    # Process and add each image as a layer
+    for layer_param in track(layer_params, description="Processing layers"):
+        try:
+            # Extract parameters
+            image_path = layer_param.image_path
+            opacity_percent = layer_param.opacity
+            x_offset = layer_param.x_offset
+            y_offset = layer_param.y_offset
+
+            # Extract layer name (without extension)
+            layer_name = get_layer_name(image_path)
+
+            if verbose:
+                console.print(
+                    f"Processing image for layer: [bold]'{layer_name}'[/bold]"
+                )
+                console.print(
+                    f"  Opacity: {opacity_percent}%, X Offset: {x_offset}, Y Offset: {y_offset}"
+                )
+
+            # Open and convert image to RGBA
+            with Image.open(image_path) as current_pil:
+                current_pil = current_pil.convert("RGBA")
+
+                # Position the image on the canvas with offsets
+                positioned_image = position_image(
+                    current_pil, canvas_width, canvas_height, center, x_offset, y_offset
+                )
+
+                # Create layer from positioned image
+                new_layer = PixelLayer.frompil(
+                    positioned_image, psd_file=psd, layer_name=layer_name
+                )
+
+                # Set the layer opacity (convert percentage to psd-tools scale)
+                # psd-tools uses a 0-255 scale for opacity
+                opacity_value = int((opacity_percent / 100) * 255)
+                new_layer.opacity = max(0, min(255, opacity_value))
+
+                # Add layer to the top of the stack
+                psd.append(new_layer)
+
+                if verbose:
+                    console.print(
+                        f"  Added layer: [bold green]'{layer_name}'[/bold green]"
+                    )
+
+        except Exception as e:
+            console.print(
+                f"[bold red]Error:[/bold red] Failed to process '{layer_param.image_path}': {e}"
+            )
+            continue
+
+    # Save the PSD file
+    try:
+        console.print(
+            f"Saving layered PSD to: [bold blue]'{output_file_path}'[/bold blue]"
+        )
+        psd.save(output_file_path)
+        console.print(
+            f"[bold green]Successfully saved PSD:[/bold green] '{output_file_path}'"
+        )
+
+        # If verbose mode is enabled, display detailed information about the saved PSD
+        if verbose:
+            console.print("\n[bold yellow]PSD Information:[/bold yellow]")
+            display_psd_info(output_file_path)
+
+        return output_file_path
+    except Exception as e:
+        console.print(f"[bold red]Error saving PSD:[/bold red] {e}")
+        raise
+
+
+def main():
+    """CLI entry point using Fire."""
+    fire.Fire(create_layered_image)
+
+
+if __name__ == "__main__":
+    main()

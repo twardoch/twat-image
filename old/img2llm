@@ -1,0 +1,339 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# dependencies = ["fire", "rich", "llm", "Pillow", "python-slugify", "opencv-python"]
+# ///
+# this_file: ~/bin/img/img2llm.py
+
+import io
+import random
+import string
+from dataclasses import dataclass
+from pathlib import Path
+
+import cv2
+import llm
+from fire import Fire
+from PIL import Image
+from slugify import slugify
+
+VIDEO_EXTENSIONS = {".mp4", ".avi", ".mov", ".mkv"}
+FALLBACK_MODELS = [
+    "openrouter/openai/gpt-4o-mini",
+    "openrouter/google/gemini-flash-1.5",
+    "gpt-4o-mini",
+    "haiku",
+]
+DEFAULT_MODEL = "openrouter/google/gemini-2.0-flash-exp:free"
+MAX_RESIZE_SIZE: tuple[int, int] = (512, 512)
+RANDOM_SUFFIX_LENGTH = 4
+
+
+@dataclass
+class MediaInfo:
+    """Container for media metadata and the processed image."""
+
+    image: Image.Image
+    original_width: int
+    original_height: int
+    fps: float = 0.0
+    duration_seconds: int = 0
+
+
+def extract_middle_frame_from_video(video_path: Path) -> tuple[Image.Image, float, int]:
+    """
+    Extract the middle frame from a video file as a PIL Image.
+
+    Args:
+        video_path: Path to the video file.
+
+    Returns:
+        A tuple containing:
+            - The PIL Image extracted from the middle frame.
+            - The original FPS of the video.
+            - The duration of the video in seconds.
+    """
+    cap = cv2.VideoCapture(str(video_path))
+    if not cap.isOpened():
+        raise ValueError(f"Unable to open video file: {video_path}")
+
+    try:
+        total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+        fps = cap.get(cv2.CAP_PROP_FPS)
+        duration = int(total_frames / fps + 0.5)  # approximate to nearest second
+        middle_frame_index = total_frames // 2
+
+        cap.set(cv2.CAP_PROP_POS_FRAMES, middle_frame_index)
+        ret, frame = cap.read()
+        if not ret:
+            raise ValueError(
+                f"Failed to read frame {middle_frame_index} from {video_path}"
+            )
+
+        image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        return image, fps, duration
+    finally:
+        cap.release()
+
+
+def load_media_info(input_path: Path) -> MediaInfo:
+    """
+    Load information from an image or a video file and return a MediaInfo object.
+
+    Args:
+        input_path: Path to the media file. Can be an image or video.
+
+    Returns:
+        MediaInfo object containing the processed image and metadata.
+    """
+    suffix = input_path.suffix.lower()
+    if suffix in VIDEO_EXTENSIONS:
+        image, fps, duration = extract_middle_frame_from_video(input_path)
+    else:
+        image = Image.open(input_path)
+        fps, duration = 0.0, 0
+
+    return MediaInfo(
+        image=image,
+        original_width=image.width,
+        original_height=image.height,
+        fps=fps,
+        duration_seconds=duration,
+    )
+
+
+def resize_image(
+    image: Image.Image, max_size: tuple[int, int] = MAX_RESIZE_SIZE
+) -> bytes:
+    """
+    Resize the image to fit within max_size while maintaining aspect ratio,
+    then return JPEG bytes of the resized image.
+
+    Args:
+        image: PIL Image to resize.
+        max_size: Maximum (width, height) dimensions.
+
+    Returns:
+        JPEG bytes of the resized image.
+    """
+    image.thumbnail(max_size, Image.Resampling.LANCZOS)
+    img_byte_arr = io.BytesIO()
+    image.save(img_byte_arr, format="JPEG")
+    return img_byte_arr.getvalue()
+
+
+def process_llm_response(response: str) -> list[str]:
+    """
+    Convert the LLM response into a list of filename-safe descriptors,
+    then append a random suffix for uniqueness.
+
+    Args:
+        response: The raw LLM response string.
+
+    Returns:
+        A list of descriptors for the filename components.
+    """
+    descriptors = slugify(response).split("-")[:6]
+    descriptors.append(generate_random_suffix())
+    return descriptors
+
+
+def generate_random_suffix(length: int = RANDOM_SUFFIX_LENGTH) -> str:
+    """
+    Generate a random alphanumeric suffix.
+
+    Args:
+        length: The number of characters in the suffix.
+
+    Returns:
+        A random string of lowercase letters and digits.
+    """
+    chars = string.ascii_lowercase + string.digits
+    return "".join(random.choices(chars, k=length))
+
+
+def generate_image_description(
+    image_bytes: bytes, model: str, fallback_models: list[str] = FALLBACK_MODELS
+) -> list[str]:
+    """
+    Generate a description for an image using an LLM, with fallback models if necessary.
+
+    Args:
+        image_bytes: JPEG bytes of the image.
+        model: Preferred LLM model identifier.
+        fallback_models: List of fallback models to try if the preferred model fails.
+
+    Returns:
+        A list of descriptive components for the filename.
+    """
+    models_to_try = [model] + [m for m in fallback_models if m != model]
+
+    for model_name in models_to_try:
+        try:
+            response = llm.get_model(model_name).prompt(
+                "Describe this image in 6 or fewer words total, focusing on: "
+                "main subject (1-2 words), color scheme (1-2 words), and style (1-2 words). "
+                "Separate with commas.",
+                max_tokens=200,
+                attachments=[llm.Attachment(content=image_bytes)],
+            )
+            return process_llm_response(str(response).strip())
+        except Exception:
+            continue
+
+    raise RuntimeError("All models failed to process the image.")
+
+
+def construct_media_basename(info: MediaInfo, description: str) -> str:
+    """
+    Construct the base filename from MediaInfo and a description string.
+
+    The format is:
+        WIDTHxHEIGHT--DESCRIPTION--DURATIONs-FPSf
+    (where the last part is only added if FPS > 0).
+
+    Args:
+        info: MediaInfo object containing original width, height, fps, and duration.
+        description: A descriptor string (e.g., from the LLM).
+
+    Returns:
+        A string suitable for use as a base filename.
+    """
+    base_parts = [
+        f"{info.original_width}x{info.original_height}",
+        description,
+    ]
+
+    if info.fps > 0:
+        base_parts.append(f"{info.duration_seconds}s-{info.fps:.2f}f")
+
+    return "--".join(base_parts)
+
+
+def resolve_collision(path: Path) -> Path:
+    """
+    If a file with the given path already exists, append a numeric suffix until no collision occurs.
+
+    Args:
+        path: The candidate Path for the new file.
+
+    Returns:
+        A Path guaranteed not to collide with an existing file.
+    """
+    if not path.exists():
+        return path
+
+    counter = 1
+    parent = path.parent
+    stem = path.stem
+    suffix = path.suffix
+
+    while True:
+        new_path = parent / f"{stem}-{counter}{suffix}"
+        if not new_path.exists():
+            return new_path
+        counter += 1
+
+
+def rename(
+    input_path: str | Path,
+    model: str = DEFAULT_MODEL,
+    keep_filename: bool = False,
+    verbose: bool = False,
+) -> str:
+    """
+    Main entry point for media renaming workflow.
+
+    1. Load MediaInfo (extract middle frame if video).
+    2. Resize to generate a smaller image.
+    3. Use LLM to create a short descriptor for the image.
+    4. Construct a new file name from metadata + descriptor.
+    5. Resolve collisions and optionally rename.
+
+    Args:
+        input_path: Path to media file.
+        model: LLM model identifier.
+        keep_filename: If True, don't actually rename any files.
+
+    Returns:
+        The new path of the renamed file, as a string.
+    """
+    path = Path(input_path)
+    media_info = load_media_info(path)
+
+    resized_image_bytes = resize_image(media_info.image)
+    description_components = generate_image_description(resized_image_bytes, model)
+    description = "-".join(description_components)
+
+    new_basename = construct_media_basename(media_info, description) + path.suffix
+    new_path = resolve_collision(path.parent / new_basename)
+
+    if not keep_filename:
+        path.rename(new_path)
+
+    return str(new_path)
+
+
+def ask(
+    input_path: str | Path,
+    model: str = DEFAULT_MODEL,
+    prompt: str = "Describe what you see in {}",
+    options: str | None = None,
+    verbose: bool = False,
+) -> str:
+    """
+    Ask a custom question about a media file using an LLM.
+
+    The prompt can contain special placeholders:
+    - {}: full path to the media file
+    - {/}: filename without folder path
+    - {.}: filename stem (without folder path or extension)
+
+    Args:
+        input_path: Path to media file
+        model: LLM model identifier
+        prompt: Question template with optional placeholders
+        verbose: If True, print additional information
+
+    Returns:
+        The LLM's response as a string
+    """
+    path = Path(input_path)
+    media_info = load_media_info(path)
+    resized_image_bytes = resize_image(media_info.image)
+
+    # Format the prompt with path components
+    formatted_prompt = (
+        prompt.replace("{}", str(path))
+        .replace("{/}", path.name)
+        .replace("{.}", path.stem)
+    )
+
+    # Try the specified model and fallbacks
+    models_to_try = [model] + [m for m in FALLBACK_MODELS if m != model]
+
+    opd = {}
+    if options:
+        for kv in options.split(","):
+            key, value = kv.split("=")
+            opd[key] = value
+    if "max_tokens" not in opd:
+        opd["max_tokens"] = 500
+
+    for model_name in models_to_try:
+        try:
+            response = llm.get_model(model_name).prompt(
+                formatted_prompt,  # Allow longer responses for custom questions
+                attachments=[llm.Attachment(content=resized_image_bytes)],
+                **opd,
+            )
+            return str(response).strip()
+        except Exception as e:
+            if verbose:
+                print(f"Model {model_name} failed: {e}")
+            continue
+
+    raise RuntimeError("All models failed to process the image.")
+
+
+if __name__ == "__main__":
+    Fire({"rename": rename, "ask": ask})

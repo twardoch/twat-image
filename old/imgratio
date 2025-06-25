@@ -1,0 +1,196 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# dependencies = ["fire", "pillow", "rich"]
+# ///
+# this_file: imgratio.py
+"""
+imgratio.py - Crop images to a specific aspect ratio while minimizing content loss.
+
+This tool recursively finds PNG and JPG images in the input folder and crops them
+to match a target aspect ratio (default: 16:9) while removing as little content as possible.
+Images are saved with the original name plus the target ratio dimensions.
+"""
+
+from pathlib import Path
+from typing import Any
+import sys
+
+from PIL import Image
+import fire  # type: ignore
+from rich import print
+from rich.progress import track
+
+
+def parse_ratio(ratio_str: str = "16:9") -> tuple[int, int]:
+    """
+    Parse aspect ratio string in W:H format.
+
+    Args:
+        ratio_str: String in format "W:H" (e.g., "16:9" for 16:9 aspect ratio)
+
+    Returns:
+        Tuple of (width_ratio, height_ratio) as integers
+    """
+    try:
+        w, h = map(int, ratio_str.split(":"))
+        if w <= 0 or h <= 0:
+            raise ValueError("Aspect ratio values must be positive")
+        return w, h
+    except ValueError:
+        print(
+            f"[red]Error: Invalid aspect ratio '{ratio_str}'. Use W:H format (e.g. '16:9')[/red]"
+        )
+        sys.exit(1)
+
+
+def calculate_crop_box(
+    img: Image.Image, target_ratio: float
+) -> tuple[int, int, int, int]:
+    """
+    Calculate crop coordinates to achieve target ratio with minimal content loss.
+
+    Args:
+        img: Source image
+        target_ratio: Target width/height ratio
+
+    Returns:
+        Tuple of (left, top, right, bottom) crop coordinates
+    """
+    w, h = img.size
+    current_ratio = w / h
+
+    if current_ratio > target_ratio:
+        # Image is too wide - crop width
+        new_w = int(h * target_ratio)
+        margin = (w - new_w) // 2
+        return (margin, 0, w - margin, h)
+    else:
+        # Image is too tall - crop height
+        new_h = int(w / target_ratio)
+        margin = (h - new_h) // 2
+        return (0, margin, w, h - margin)
+
+
+def fix_orientation(img: Image.Image) -> Image.Image:
+    """Apply EXIF orientation tag if present."""
+    try:
+        exif = img.getexif()
+        if exif:
+            orientation = next(
+                (exif[tag] for tag in (274, 0x0112) if tag in exif), None
+            )
+            if orientation:
+                ORIENTATION_TRANSFORMS = {
+                    2: Image.Transpose.FLIP_LEFT_RIGHT,
+                    3: Image.Transpose.ROTATE_180,
+                    4: Image.Transpose.FLIP_TOP_BOTTOM,
+                    5: Image.Transpose.TRANSPOSE,
+                    6: Image.Transpose.ROTATE_270,
+                    7: Image.Transpose.TRANSVERSE,
+                    8: Image.Transpose.ROTATE_90,
+                }
+                if orientation in ORIENTATION_TRANSFORMS:
+                    return img.transpose(ORIENTATION_TRANSFORMS[orientation])
+    except Exception as e:
+        print(f"[yellow]Warning: Could not process EXIF orientation: {e}[/yellow]")
+    return img
+
+
+def process_image(
+    img_path: Path, out_dir: Path | None, width_ratio: int, height_ratio: int
+) -> Path | None:
+    """Process a single image, cropping it to the target aspect ratio."""
+    try:
+        with Image.open(img_path) as img:
+            # Fix orientation and calculate crop
+            img = fix_orientation(img)
+            crop_box = calculate_crop_box(img, width_ratio / height_ratio)
+
+            # Crop and prepare output path
+            cropped = img.crop(crop_box)
+
+            # If no output directory specified, save next to original
+            out_path = (
+                out_dir if out_dir else img_path.parent
+            ) / f"{img_path.stem}_{width_ratio}x{height_ratio}{img_path.suffix}"
+
+            # Save with original format and quality
+            save_kwargs: dict[str, Any] = {}
+            if img_path.suffix.lower() in (".jpg", ".jpeg"):
+                save_kwargs.update(quality=95, subsampling=0)
+                if "exif" in img.info:
+                    save_kwargs["exif"] = img.info["exif"]
+
+            cropped.save(out_path, **save_kwargs)
+            return out_path
+
+    except Exception as e:
+        print(f"[red]Error processing {img_path.name}: {e}[/red]")
+        return None
+
+
+def find_images(input_path: Path) -> list[Path]:
+    """Recursively find all JPG and PNG files in input path."""
+    if input_path.is_file():
+        return (
+            [input_path]
+            if input_path.suffix.lower() in (".jpg", ".jpeg", ".png")
+            else []
+        )
+
+    return [
+        p
+        for p in input_path.rglob("*")
+        if p.suffix.lower() in (".jpg", ".jpeg", ".png")
+    ]
+
+
+def main(input: str, ar: str = "16:9", out_dir: str = "") -> None:
+    """
+    Crop images to a specific aspect ratio while minimizing content loss.
+
+    Args:
+        input: Path to input image or directory
+        ar: Target aspect ratio in W:H format (default: 16:9)
+        out_dir: Output directory (default: save next to original images)
+    """
+    # Convert paths and validate input
+    input_path = Path(input).resolve()
+    if not input_path.exists():
+        print(f"[red]Error: Input path '{input}' does not exist[/red]")
+        sys.exit(1)
+
+    # Parse aspect ratio
+    width_ratio, height_ratio = parse_ratio(ar)
+    print(f"[green]Using aspect ratio {width_ratio}:{height_ratio}[/green]")
+
+    # Setup output directory if specified
+    out_path: Path | None = None
+    if out_dir:
+        out_path = Path(out_dir)
+        out_path.mkdir(parents=True, exist_ok=True)
+        print(f"[green]Output directory: {out_path}[/green]")
+    else:
+        print("[green]Saving images next to originals[/green]")
+
+    # Process images
+    images = find_images(input_path)
+    if not images:
+        print(f"[yellow]No images found in {input}[/yellow]")
+        return
+
+    print(f"[green]Found {len(images)} image(s)[/green]")
+    successful = 0
+
+    for img_path in track(images, description="Processing images"):
+        if result_path := process_image(img_path, out_path, width_ratio, height_ratio):
+            successful += 1
+            print(f"[green]Processed: {result_path.name}[/green]")
+
+    print(
+        f"\n[green]Processing complete: {successful}/{len(images)} images processed successfully[/green]"
+    )
+
+
+if __name__ == "__main__":
+    fire.Fire(main)

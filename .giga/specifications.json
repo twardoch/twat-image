@@ -1,0 +1,22 @@
+[
+  {
+    "fileName": "main-overview.mdc",
+    "description": "Complete system overview documenting the collection of image processing tools, their relationships, and overall architecture"
+  },
+  {
+    "fileName": "color-processing-algorithms.mdc",
+    "description": "Detailed documentation of color space transformations, palette mapping algorithms, and color preservation techniques used in imgrepalette and related tools"
+  },
+  {
+    "fileName": "image-similarity-algorithms.mdc",
+    "description": "Comprehensive documentation of image similarity calculation algorithms, visual sequencing logic, and matching strategies used in imgsort and imgrenmatch implementations"
+  },
+  {
+    "fileName": "delta-processing-system.mdc",
+    "description": "Technical documentation of the delta-based image processing system including split-process-merge workflow, delta calculation, and quality preservation algorithms"
+  },
+  {
+    "fileName": "layer-composition-model.mdc",
+    "description": "Detailed specification of the layer management system, positioning algorithms, and canvas sizing strategies used in PSD creation tools"
+  }
+]

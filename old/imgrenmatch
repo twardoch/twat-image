@@ -1,0 +1,372 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# dependencies = ["fire", "rich", "pillow", "numpy", "numba", "loguru"]
+# ///
+# this_file: ~/bin/img/imgrenmatch
+
+"""Image renaming tool that matches images visually using optimized distance computation.
+
+This script renames images in a directory based on visual similarity to reference images.
+It uses numba-accelerated distance computations for efficient processing of large image sets.
+"""
+
+import shutil
+from pathlib import Path
+from typing import Tuple, List, Optional
+
+import fire
+import numpy as np
+from numba import jit, prange  # type: ignore
+from PIL import Image
+from rich.console import Console
+from rich.progress import Progress
+from loguru import logger
+
+console = Console()
+
+
+@jit(nopython=True, parallel=True, cache=True)
+def compute_mse_distances_numba(
+    dir_images: np.ndarray, ref_images: np.ndarray
+) -> np.ndarray:
+    """Compute MSE distances between all pairs of images using numba acceleration.
+    
+    This function uses parallel processing and JIT compilation for significant speedup.
+    The MSE (Mean Squared Error) is computed as the average squared difference
+    between pixel values across all channels.
+    
+    Args:
+        dir_images: Array of shape (n_dir, pixels) containing flattened source images
+        ref_images: Array of shape (n_ref, pixels) containing flattened reference images
+        
+    Returns:
+        Distance matrix of shape (n_dir, n_ref) with MSE values
+    """
+    n_dir = dir_images.shape[0]
+    n_ref = ref_images.shape[0]
+    n_pixels = dir_images.shape[1]
+    
+    # Pre-allocate distance matrix for better memory efficiency
+    distances = np.zeros((n_dir, n_ref), dtype=np.float32)
+    
+    # Parallel computation of distances using prange for multi-threading
+    for i in prange(n_dir):
+        for j in range(n_ref):
+            # Compute squared differences and sum
+            diff_sum = 0.0
+            for k in range(n_pixels):
+                diff = dir_images[i, k] - ref_images[j, k]
+                diff_sum += diff * diff
+            # Store normalized MSE (divided by number of pixels)
+            distances[i, j] = diff_sum / n_pixels
+    
+    return distances
+
+
+def load_and_downsample(
+    img_path: Path,
+    target_size: Tuple[int, int] = (256, 256),
+) -> Tuple[np.ndarray, int, int]:
+    """Load and downsample an image to a consistent size for comparison.
+    
+    Images are converted to RGB and resized using high-quality Lanczos resampling.
+    Float32 arrays are used for precise distance calculations.
+
+    Args:
+        img_path: Path to the image file
+        target_size: Desired (width, height) for downsampling
+
+    Returns:
+        Tuple of (image array, actual width, actual height)
+        
+    Raises:
+        Exception: If image cannot be loaded or processed
+    """
+    try:
+        with Image.open(img_path) as im:
+            # Ensure consistent color space
+            im = im.convert("RGB")
+            width, height = target_size
+            # High-quality downsampling for better feature preservation
+            im = im.resize((width, height), Image.Resampling.LANCZOS)
+            logger.debug(f"Loaded and resized {img_path.name} to {width}x{height}")
+            return np.array(im, dtype=np.float32), im.width, im.height
+    except Exception as e:
+        logger.error(f"Error processing {img_path}: {e!s}")
+        console.print(f"[red]Error processing {img_path}: {e!s}[/red]")
+        raise
+
+
+def get_image_files(directory: Path) -> List[Path]:
+    """Get all supported image files from a directory.
+    
+    Supported formats: PNG, JPG, JPEG, WebP, GIF
+    Files are returned in sorted order for consistent processing.
+    
+    Args:
+        directory: Path to scan for images
+        
+    Returns:
+        Sorted list of image file paths
+    """
+    extensions = {".png", ".jpg", ".jpeg", ".webp", ".gif"}
+    files = sorted(
+        p for p in directory.iterdir() 
+        if p.is_file() and p.suffix.lower() in extensions
+    )
+    logger.info(f"Found {len(files)} image files in {directory}")
+    return files
+
+
+def load_images_from_dir(
+    directory: Path, 
+    target_size: Tuple[int, int], 
+    label: str,
+    verbose: bool = False
+) -> Tuple[List[np.ndarray], List[Path]]:
+    """Load and downsample images from a directory with progress tracking.
+    
+    Invalid images are skipped with warnings rather than failing the entire operation.
+
+    Args:
+        directory: The directory containing images
+        target_size: The size to which each image is downsampled
+        label: Descriptive label for progress display
+        verbose: If True, show detailed loading information
+
+    Returns:
+        Tuple of (list of image arrays, list of corresponding file paths)
+    """
+    files = get_image_files(directory)
+    images: List[np.ndarray] = []
+    valid_paths: List[Path] = []
+    
+    with Progress(disable=not verbose) as progress:
+        task = progress.add_task(f"Loading {label}...", total=len(files))
+        for path in files:
+            try:
+                img, _, _ = load_and_downsample(path, target_size)
+                images.append(img)
+                valid_paths.append(path)
+                if verbose:
+                    logger.debug(f"Successfully loaded {path.name}")
+            except Exception:
+                console.print(f"[yellow]Skipping invalid image: {path.name}[/yellow]")
+                logger.warning(f"Failed to load image: {path.name}")
+            progress.advance(task)
+    
+    logger.info(f"Successfully loaded {len(images)}/{len(files)} images from {label}")
+    return images, valid_paths
+
+
+def compute_distance_matrix(
+    dir_images: List[np.ndarray], 
+    ref_images: List[np.ndarray]
+) -> np.ndarray:
+    """Compute the MSE distance matrix using numba-optimized computation.
+    
+    This function prepares image data and calls the numba-accelerated kernel
+    for efficient distance computation between all image pairs.
+
+    Args:
+        dir_images: List of source image arrays
+        ref_images: List of reference image arrays
+
+    Returns:
+        2D array where element [i,j] is the MSE between dir_images[i] and ref_images[j]
+    """
+    n_dir = len(dir_images)
+    n_ref = len(ref_images)
+    
+    # Stack and flatten images for efficient batch processing
+    dir_stack = np.stack(dir_images)  # shape: (n_dir, h, w, c)
+    ref_stack = np.stack(ref_images)  # shape: (n_ref, h, w, c)
+    
+    # Flatten spatial and channel dimensions
+    dir_flat = dir_stack.reshape(n_dir, -1).astype(np.float32)
+    ref_flat = ref_stack.reshape(n_ref, -1).astype(np.float32)
+    
+    logger.debug(f"Computing distance matrix of size {n_dir}x{n_ref}")
+    
+    # Call numba-optimized function for fast computation
+    distances = compute_mse_distances_numba(dir_flat, ref_flat)
+    
+    return distances
+
+
+def find_closest_matches(distance_matrix: np.ndarray) -> List[int]:
+    """Find the index of the closest reference image for each source image.
+    
+    Uses argmin to find minimum MSE values along the reference axis.
+
+    Args:
+        distance_matrix: The computed MSE distance matrix
+
+    Returns:
+        List of indices indicating the best matching reference for each source
+    """
+    matches: List[int] = np.argmin(distance_matrix, axis=1).tolist()
+    logger.debug(f"Found matches: {matches}")
+    return matches
+
+
+def generate_rename_mapping(
+    dir_paths: List[Path], 
+    ref_paths: List[Path], 
+    matches: List[int]
+) -> List[Tuple[Path, Path]]:
+    """Generate rename mapping with automatic conflict resolution.
+    
+    When multiple source images match the same reference, numeric suffixes
+    are added to prevent naming conflicts (e.g., image_1.jpg, image_2.jpg).
+
+    Args:
+        dir_paths: List of source image paths
+        ref_paths: List of reference image paths
+        matches: List of indices indicating the best matching reference
+
+    Returns:
+        List of (original_path, new_path) tuples
+    """
+    mapping: List[Tuple[Path, Path]] = []
+    used_names: dict[str, int] = {}
+    
+    for i, ref_idx in enumerate(matches):
+        src_path = dir_paths[i]
+        # Use reference image's stem as base name
+        base_name = ref_paths[ref_idx].stem
+        candidate = f"{base_name}{src_path.suffix}"
+        
+        # Handle naming conflicts with numeric suffixes
+        if candidate in used_names:
+            used_names[candidate] += 1
+            candidate = f"{base_name}_{used_names[candidate]}{src_path.suffix}"
+        else:
+            used_names[candidate] = 0
+            
+        new_path = src_path.parent / candidate
+        mapping.append((src_path, new_path))
+        logger.debug(f"Mapping: {src_path.name} -> {new_path.name}")
+    
+    return mapping
+
+
+def rename_files(
+    mapping: List[Tuple[Path, Path]], 
+    dry_run: bool,
+    verbose: bool = False
+) -> None:
+    """Execute or preview file renaming operations.
+    
+    In dry-run mode, displays planned changes without modifying files.
+    Skips renames where target already exists to prevent data loss.
+
+    Args:
+        mapping: List of (original_path, new_path) tuples
+        dry_run: If True, only display planned renames
+        verbose: If True, show detailed progress
+    """
+    if dry_run:
+        console.print("\n[bold]Dry run - no files will be renamed[/bold]")
+        console.print("[bold]Planned renames:[/bold]")
+        for old, new in mapping:
+            console.print(f"  {old.name} -> {new.name}")
+        logger.info(f"Dry run completed - would rename {len(mapping)} files")
+    else:
+        console.print("\nRenaming files...")
+        renamed_count = 0
+        
+        with Progress(disable=not verbose) as progress:
+            task = progress.add_task("Renaming...", total=len(mapping))
+            for old, new in mapping:
+                if new.exists() and old != new:
+                    msg = f"Skipping {old.name} -> {new.name} (target exists)"
+                    console.print(f"[yellow]{msg}[/yellow]")
+                    logger.warning(msg)
+                else:
+                    shutil.move(str(old), str(new))
+                    renamed_count += 1
+                    if verbose:
+                        logger.debug(f"Renamed: {old.name} -> {new.name}")
+                progress.advance(task)
+                
+        console.print(f"[green]Successfully renamed {renamed_count} files![/green]")
+        logger.info(f"Renamed {renamed_count}/{len(mapping)} files")
+
+
+def cli(
+    input_dir: str | Path, 
+    ref_dir: str | Path, 
+    dry_run: bool = False,
+    verbose: bool = False,
+    target_size: int = 256
+) -> None:
+    """Rename images based on visual similarity to reference images.
+    
+    This tool uses computer vision to find the most visually similar reference
+    image for each input image and renames accordingly. Uses numba acceleration
+    for fast processing of large image collections.
+
+    Args:
+        input_dir: Directory containing images to be renamed
+        ref_dir: Directory containing reference images for naming
+        dry_run: If True, show planned renames without applying them
+        verbose: If True, show detailed progress and debug information
+        target_size: Size for image downsampling (square dimensions)
+    """
+    # Configure logging based on verbosity
+    if verbose:
+        logger.enable("__main__")
+    else:
+        logger.disable("__main__")
+        
+    source_dir = Path(input_dir)
+    reference_dir = Path(ref_dir)
+
+    # Validate directories
+    if not source_dir.exists():
+        console.print("[red]Error: Source directory does not exist[/red]")
+        logger.error(f"Source directory not found: {source_dir}")
+        return
+    if not reference_dir.exists():
+        console.print("[red]Error: Reference directory does not exist[/red]")
+        logger.error(f"Reference directory not found: {reference_dir}")
+        return
+
+    # Use square target size for consistent comparison
+    size_tuple = (target_size, target_size)
+    
+    # Load images with progress tracking
+    src_images, src_paths = load_images_from_dir(
+        source_dir, size_tuple, "source images", verbose
+    )
+    ref_images, ref_paths = load_images_from_dir(
+        reference_dir, size_tuple, "reference images", verbose
+    )
+
+    # Validate we have images to process
+    if not src_images:
+        console.print("[yellow]No valid source images found[/yellow]")
+        logger.warning("No valid source images to process")
+        return
+    if not ref_images:
+        console.print("[yellow]No valid reference images found[/yellow]")
+        logger.warning("No valid reference images for matching")
+        return
+
+    console.print(
+        f"Processing {len(src_images)} source images and {len(ref_images)} reference images..."
+    )
+    
+    # Compute distances and find matches using optimized functions
+    with console.status("Computing visual similarity...") if not verbose else console:
+        distance_matrix = compute_distance_matrix(src_images, ref_images)
+        matches = find_closest_matches(distance_matrix)
+        
+    # Generate and apply rename mapping
+    mapping = generate_rename_mapping(src_paths, ref_paths, matches)
+    rename_files(mapping, dry_run, verbose)
+
+
+if __name__ == "__main__":
+    fire.Fire(cli)

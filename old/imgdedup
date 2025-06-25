@@ -1,0 +1,176 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# dependencies = ["fire", "rich", "Pillow", "imagehash", "loguru", "pydantic"]
+# ///
+# this_file: ~/bin/img/imgdedup.py
+
+"""
+A script to remove smaller duplicate images in a folder, keeping only the largest image for each unique content.
+"""
+
+import sys
+from pathlib import Path
+
+import fire
+import imagehash
+from loguru import logger
+from PIL import Image
+from pydantic import BaseModel
+from rich.progress import BarColumn, Progress, SpinnerColumn
+
+# Set up logger with controllable verbosity
+logger.remove()  # Remove default logger
+logger.add(sys.stderr, level="INFO")
+
+
+class ImageFile(BaseModel):
+    """
+    Represents an image file with its path and computed hash.
+    """
+
+    path: Path
+    hash: str = ""
+    size: int = 0
+
+    def compute_hash(self) -> None:
+        """Compute the perceptual hash of the image."""
+        try:
+            with Image.open(self.path) as img:
+                self.hash = str(imagehash.average_hash(img))
+        except Exception as e:
+            logger.error(f"Error processing {self.path}: {e}")
+
+    def compute_size(self) -> None:
+        """Compute the file size of the image."""
+        self.size = self.path.stat().st_size
+
+
+async def find_image_files(
+    folder: Path, supported_formats: set[str]
+) -> list[ImageFile]:
+    """Find all image files in the specified folder."""
+    image_files = [
+        ImageFile(path=path)
+        for path in folder.iterdir()
+        if path.suffix.lower() in supported_formats and path.is_file()
+    ]
+    return image_files
+
+
+async def compute_hashes(image_files: list[ImageFile]) -> None:
+    """Compute hashes for all image files."""
+    with Progress(
+        SpinnerColumn(),
+        "[progress.description]{task.description}",
+        BarColumn(),
+        "{task.completed}/{task.total}",
+        transient=True,
+    ) as progress:
+        task = progress.add_task(
+            "[green]Computing image hashes...", total=len(image_files)
+        )
+        for image_file in image_files:
+            image_file.compute_hash()
+            progress.update(task, advance=1)
+
+
+def group_images_by_hash(image_files: list[ImageFile]) -> dict[str, list[ImageFile]]:
+    """Group images by their hash values."""
+    hash_groups: dict[str, list[ImageFile]] = {}
+    for image_file in image_files:
+        if image_file.hash:
+            hash_groups.setdefault(image_file.hash, []).append(image_file)
+    return hash_groups
+
+
+def select_largest_images(hash_groups: dict[str, list[ImageFile]]) -> set[Path]:
+    """Select the largest image in each group to keep."""
+    images_to_keep: set[Path] = set()
+    images_to_delete: set[Path] = set()
+
+    for group in hash_groups.values():
+        if len(group) == 1:
+            images_to_keep.add(group[0].path)
+            continue
+
+        # Compute sizes
+        for image_file in group:
+            image_file.compute_size()
+
+        # Sort by size
+        group.sort(key=lambda x: x.size, reverse=True)
+        images_to_keep.add(group[0].path)
+        images_to_delete.update(image_file.path for image_file in group[1:])
+
+    return images_to_keep, images_to_delete
+
+
+def delete_images(images_to_delete: set[Path]) -> None:
+    """Delete the specified images."""
+    for image_path in images_to_delete:
+        try:
+            image_path.unlink()
+            logger.info(f"Deleted {image_path}")
+        except Exception as e:
+            logger.error(f"Could not delete {image_path}: {e}")
+
+
+def configure_logger(verbosity: int) -> None:
+    """Configure logging level based on verbosity."""
+    level = "INFO"
+    if verbosity == 0:
+        level = "WARNING"
+    elif verbosity == 1:
+        level = "INFO"
+    elif verbosity >= 2:
+        level = "DEBUG"
+    logger.remove()
+    logger.add(sys.stderr, level=level)
+
+
+async def main(
+    folder_path: str,
+    delete: bool = False,
+    use_dimensions: bool = False,
+    verbosity: int = 1,
+) -> None:
+    """
+    Remove smaller duplicates of images, keeping only the largest image for each unique content.
+
+    Args:
+        folder_path: Path to the folder containing images.
+        delete: Whether to delete the smaller images. Defaults to False.
+        use_dimensions: Use image dimensions instead of file size to determine the largest image.
+        verbosity: Logging verbosity level. 0=WARNING, 1=INFO, 2=DEBUG.
+    """
+    configure_logger(verbosity)
+    folder = Path(folder_path)
+    if not folder.is_dir():
+        logger.error(f"The specified path '{folder}' is not a directory.")
+        return
+
+    supported_formats = {".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff"}
+    image_files = await find_image_files(folder, supported_formats)
+    logger.info(f"Found {len(image_files)} image(s).")
+
+    await compute_hashes(image_files)
+    hash_groups = group_images_by_hash(image_files)
+
+    images_to_keep, images_to_delete = select_largest_images(hash_groups)
+    logger.info(f"Images to keep: {len(images_to_keep)}")
+    logger.info(f"Images to delete: {len(images_to_delete)}")
+
+    if delete:
+        delete_images(images_to_delete)
+        logger.info("Deletion complete.")
+    else:
+        logger.info(
+            "Deletion not performed. Use '--delete=True' to delete the smaller images."
+        )
+
+
+if __name__ == "__main__":
+    try:
+        fire.Fire(main)
+    except Exception as e:
+        logger.exception(f"An error occurred: {e}")

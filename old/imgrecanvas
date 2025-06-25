@@ -1,0 +1,369 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# dependencies = ["pillow", "fire", "rich", "opencv-python", "numpy"]
+# ///
+# this_file: /Users/adam/bin/imgrecanvas.py
+
+import os
+import glob
+from pathlib import Path
+import logging
+from typing import Literal
+
+import cv2
+import numpy as np
+from PIL import Image
+import fire
+from rich.logging import RichHandler
+from rich.progress import Progress
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True)],
+)
+log = logging.getLogger("imgrecanvas")
+
+ModeType = Literal["ns", "telea", "alpha", "white", "black"]
+
+
+def clean_mode_for_suffix(mode: str) -> str:
+    """Return a cleaned version of mode suitable for filename suffix."""
+    if mode.startswith("#"):
+        return mode[1:].lower()
+    return mode.lower()
+
+
+def get_suffix(width: int, height: int, mode: str) -> str:
+    """Generate suffix for output filenames."""
+    mode_cleaned = clean_mode_for_suffix(mode)
+    return f"-{width}x{height}-{mode_cleaned}"
+
+
+def recanvas_image(
+    input_path: str,
+    output_path: str | None = None,
+    width: int | None = None,
+    height: int | None = None,
+    center: bool = False,
+    mode: str = "ns",
+    verbose: bool = False,
+) -> str:
+    """
+    Re-canvas an image by expanding or cropping it to the specified dimensions.
+
+    Args:
+        input_path: Path to the input image file
+        output_path: Path for the output image file (optional)
+        width: Target width of the output image
+        height: Target height of the output image
+        center: If True, re-canvas from center, otherwise from top-left
+        mode: How to handle expanded areas - one of:
+              'ns', 'telea' (OpenCV algorithms),
+              'alpha' (transparent), 'white', 'black', or '#RRGGBB' (hex color)
+        verbose: Enable verbose logging
+
+    Returns:
+        Path to the output image file
+    """
+    if verbose:
+        log.setLevel(logging.DEBUG)
+
+    log.debug(f"Reading image: {input_path}")
+
+    # Open the image with PIL
+    img = Image.open(input_path)
+    orig_width, orig_height = img.size
+    log.debug(f"Original size: {orig_width}x{orig_height}")
+
+    # If width or height not specified, use original dimensions
+    final_width = width if width is not None else orig_width
+    final_height = height if height is not None else orig_height
+
+    # Determine output path if not provided
+    if not output_path:
+        suffix = get_suffix(final_width, final_height, mode)
+        file_path = Path(input_path)
+        output_path = str(
+            file_path.parent / f"{file_path.stem}{suffix}{file_path.suffix}"
+        )
+
+    log.debug(f"Output path: {output_path}")
+
+    # Check if we need to expand or crop
+    needs_expand = final_width > orig_width or final_height > orig_height
+
+    # Create the new image
+    if needs_expand:
+        # Handle expansion based on mode
+        if mode.lower() in ["ns", "telea"]:
+            # For OpenCV inpainting methods, we need to convert and process
+            cv_img = cv2.imread(input_path)
+            if cv_img is None:
+                raise ValueError(f"Could not read image: {input_path}")
+
+            # Create expanded canvas with zeros
+            if center:
+                pad_left = (final_width - orig_width) // 2
+                pad_right = final_width - orig_width - pad_left
+                pad_top = (final_height - orig_height) // 2
+                pad_bottom = final_height - orig_height - pad_top
+            else:
+                pad_left, pad_top = 0, 0
+                pad_right = max(0, final_width - orig_width)
+                pad_bottom = max(0, final_height - orig_height)
+
+            canvas = np.pad(
+                cv_img,
+                pad_width=((pad_top, pad_bottom), (pad_left, pad_right), (0, 0)),
+                mode="constant",
+                constant_values=0,
+            )
+
+            # Generate outpaint mask: area outside the original image
+            mask = np.ones(canvas.shape[:2], dtype=np.uint8) * 255
+            if center:
+                mask[
+                    pad_top : pad_top + orig_height, pad_left : pad_left + orig_width
+                ] = 0
+            else:
+                mask[:orig_height, :orig_width] = 0
+
+            # Select algorithm
+            method_flag = cv2.INPAINT_NS if mode.lower() == "ns" else cv2.INPAINT_TELEA
+
+            log.debug(f"Applying {mode} inpainting")
+            result = cv2.inpaint(canvas, mask, 3, method_flag)
+
+            # Convert back to PIL
+            result_pil = Image.fromarray(cv2.cvtColor(result, cv2.COLOR_BGR2RGB))
+            result_pil.save(output_path)
+
+            return output_path
+        else:
+            # For other modes, use PIL directly
+            if mode.lower() == "alpha":
+                new_img = Image.new("RGBA", (final_width, final_height), (0, 0, 0, 0))
+            elif mode.lower() == "white":
+                new_img = Image.new("RGB", (final_width, final_height), (255, 255, 255))
+            elif mode.lower() == "black":
+                new_img = Image.new("RGB", (final_width, final_height), (0, 0, 0))
+            elif mode.startswith("#"):
+                try:
+                    # Create a fixed size tuple for the color
+                    r = int(mode[1:3], 16)
+                    g = int(mode[3:5], 16)
+                    b = int(mode[5:7], 16)
+                    new_img = Image.new("RGB", (final_width, final_height), (r, g, b))
+                except ValueError:
+                    raise ValueError(f"Invalid hex color: {mode}. Use format #RRGGBB.")
+            else:
+                raise ValueError(f"Unsupported mode: {mode}")
+
+            # Paste original image onto the new canvas
+            if center:
+                paste_x = (final_width - orig_width) // 2
+                paste_y = (final_height - orig_height) // 2
+            else:
+                paste_x, paste_y = 0, 0
+
+            new_img.paste(img, (paste_x, paste_y))
+    else:
+        # For cropping, calculate the crop box
+        if center:
+            left = (orig_width - final_width) // 2
+            top = (orig_height - final_height) // 2
+        else:
+            left, top = 0, 0
+
+        right = left + final_width
+        bottom = top + final_height
+
+        log.debug(
+            f"Cropping to {final_width}x{final_height} from position ({left},{top})"
+        )
+        new_img = img.crop((left, top, right, bottom))
+
+    # Save the result
+    new_img.save(output_path)
+    return output_path
+
+
+def process_images(
+    input_path: str,
+    output_path: str | None = None,
+    width: int | None = None,
+    height: int | None = None,
+    center: bool = False,
+    mode: str = "ns",
+    verbose: bool = False,
+) -> list:
+    """
+    Process one or more images for re-canvasing based on input path.
+
+    Args:
+        input_path: Path to input image or directory
+        output_path: Path for output (optional)
+        width: Target width
+        height: Target height
+        center: If True, re-canvas from center
+        mode: Processing mode
+        verbose: Enable verbose logging
+
+    Returns:
+        List of processed image paths
+    """
+    if verbose:
+        log.setLevel(logging.DEBUG)
+
+    input_path = os.path.abspath(input_path)
+    processed_files = []
+
+    # If width or height not specified, we still need them for the suffix
+    final_width = width if width is not None else 0
+    final_height = height if height is not None else 0
+
+    # Check if input_path is a file or directory
+    if os.path.isfile(input_path):
+        # Single file processing
+        if not output_path:
+            # Generate output path with suffix
+            img = Image.open(input_path)
+            if final_width == 0:
+                final_width = img.width
+            if final_height == 0:
+                final_height = img.height
+
+            suffix = get_suffix(final_width, final_height, mode)
+            file_path = Path(input_path)
+            output_path = str(
+                file_path.parent / f"{file_path.stem}{suffix}{file_path.suffix}"
+            )
+
+        processed_files.append(
+            recanvas_image(
+                input_path=input_path,
+                output_path=output_path,
+                width=width,
+                height=height,
+                center=center,
+                mode=mode,
+                verbose=verbose,
+            )
+        )
+
+    elif os.path.isdir(input_path):
+        # Directory processing
+        image_extensions = [".jpg", ".jpeg", ".png", ".bmp", ".tiff", ".webp"]
+        image_files = []
+
+        # Find all image files recursively
+        for ext in image_extensions:
+            image_files.extend(glob.glob(f"{input_path}/**/*{ext}", recursive=True))
+            image_files.extend(
+                glob.glob(f"{input_path}/**/*{ext.upper()}", recursive=True)
+            )
+
+        image_files = sorted(list(set(image_files)))  # Remove duplicates
+
+        if not image_files:
+            log.warning(f"No image files found in {input_path}")
+            return []
+
+        log.info(f"Found {len(image_files)} image files to process")
+
+        with Progress() as progress:
+            task = progress.add_task(
+                "[green]Processing images...", total=len(image_files)
+            )
+
+            for img_file in image_files:
+                rel_path = os.path.relpath(img_file, input_path)
+
+                if output_path:
+                    # Output to different directory
+                    out_dir = output_path
+                    out_file = os.path.join(out_dir, rel_path)
+                else:
+                    # Output to same directory with suffix
+                    # We need to determine final dimensions for the suffix
+                    img = Image.open(img_file)
+                    img_width = img.width
+                    img_height = img.height
+
+                    w = width if width is not None else img_width
+                    h = height if height is not None else img_height
+
+                    suffix = get_suffix(w, h, mode)
+                    file_path = Path(img_file)
+                    out_file = str(
+                        file_path.parent / f"{file_path.stem}{suffix}{file_path.suffix}"
+                    )
+
+                # Create output directory if it doesn't exist
+                os.makedirs(os.path.dirname(os.path.abspath(out_file)), exist_ok=True)
+
+                try:
+                    processed = recanvas_image(
+                        input_path=img_file,
+                        output_path=out_file,
+                        width=width,
+                        height=height,
+                        center=center,
+                        mode=mode,
+                        verbose=verbose,
+                    )
+                    processed_files.append(processed)
+                except Exception as e:
+                    log.error(f"Error processing {img_file}: {e}")
+
+                progress.update(task, advance=1)
+
+    else:
+        raise ValueError(f"Input path not found: {input_path}")
+
+    log.info(f"Processed {len(processed_files)} images")
+    return processed_files
+
+
+def main(
+    input_path: str,
+    output_path: str | None = None,
+    width: int | None = None,
+    height: int | None = None,
+    center: bool = False,
+    mode: str = "ns",
+    verbose: bool = False,
+):
+    """
+    Re-canvas images by expanding or cropping to specified dimensions.
+
+    Args:
+        input_path: Path to input image file or directory
+        output_path: Path for output (optional)
+        width: Target width of the output image
+        height: Target height of the output image
+        center: If True, re-canvas from center, otherwise from top-left
+        mode: How to handle expanded areas:
+              'ns' (OpenCV, default), 'telea' (OpenCV),
+              'alpha' (transparent), 'white', 'black', or '#RRGGBB' (hex color)
+        verbose: Enable verbose logging
+    """
+    if not width and not height:
+        raise ValueError("At least one of --width or --height must be specified")
+
+    process_images(
+        input_path=input_path,
+        output_path=output_path,
+        width=width,
+        height=height,
+        center=center,
+        mode=mode,
+        verbose=verbose,
+    )
+
+
+if __name__ == "__main__":
+    fire.Fire(main)

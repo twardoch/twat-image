@@ -1,0 +1,185 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# dependencies = ["fire", "rich", "Pillow", "imagehash", "loguru", "pydantic"]
+# this_file: ~/bin/img/imgs2layers5.py
+
+"""
+img2layers5.py - A tool to create layered PSD files from multiple images.
+
+This script takes two or more images, uses the first image as the base,
+crops subsequent images to match the dimensions of the first image,
+and overlays them onto the first image in a layered PSD format.
+"""
+
+import subprocess
+import tempfile
+from pathlib import Path
+
+import fire
+
+
+def get_image_dimensions(image_path: str) -> tuple[int, int]:
+    """
+    Get the dimensions of an image using ImageMagick.
+
+    Args:
+        image_path: Path to the image file
+
+    Returns:
+        Tuple of (width, height)
+    """
+    result = subprocess.run(
+        ["magick", "identify", "-format", "%w %h", image_path],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    width, height = map(int, result.stdout.strip().split())
+    return width, height
+
+
+def crop_image_to_dimensions(
+    image_path: str, width: int, height: int, output_path: str
+) -> str:
+    """
+    Crop an image to the specified dimensions.
+
+    Args:
+        image_path: Path to the image to crop
+        width: Target width
+        height: Target height
+        output_path: Path to save the cropped image
+
+    Returns:
+        Path to the cropped image
+    """
+    cmd = [
+        "magick",
+        image_path,
+        "-gravity",
+        "center",
+        "-extent",
+        f"{width}x{height}",
+        output_path,
+    ]
+
+    subprocess.run(cmd, check=True)
+    return output_path
+
+
+def create_layered_psd(
+    *images: str, output: str | None = None, verbose: bool = False
+) -> str:
+    """
+    Create a layered PSD file from multiple images.
+
+    Args:
+        *images: Two or more image files. The first image is used as the base.
+        output: Optional output path. If not provided, the output will be
+                the path of the first image with "-layers" suffix.
+        verbose: If True, prints additional information.
+
+    Returns:
+        The path to the created PSD file.
+    """
+    if len(images) < 2:
+        raise ValueError("At least two images are required")
+
+    # Get the base image path
+    base_image = images[0]
+    base_path = Path(base_image)
+
+    # Determine output path if not provided
+    if output is None:
+        output = f"{base_path.stem}-layers.psd"
+    elif not output.lower().endswith(".psd"):
+        output = f"{output}.psd"
+
+    # Get dimensions of the base image
+    width, height = get_image_dimensions(base_image)
+    if verbose:
+        print(f"Base image dimensions: {width}x{height}")
+
+    # Create a temporary directory to store cropped images
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_dir_path = Path(temp_dir)
+
+        # Prepare list of images to use (crop all except the first one)
+        processed_images = [base_image]
+
+        # Crop all subsequent images to match the first image's dimensions
+        for i, img in enumerate(images[1:], 1):
+            img_path = Path(img)
+            cropped_img = temp_dir_path / f"cropped_{img_path.name}"
+
+            if verbose:
+                print(f"Cropping {img} to match base dimensions...")
+
+            # Crop the image
+            crop_image_to_dimensions(img, width, height, str(cropped_img))
+            processed_images.append(str(cropped_img))
+
+        # Construct the ImageMagick command based on the examples in the task
+        cmd = ["magick"]
+
+        # Add all processed images
+        cmd.extend(processed_images)
+
+        # Add the operation that creates a white background with base image's dimensions
+        cmd.extend(
+            [
+                "(",  # Start a new image list
+                "-clone",
+                "0",  # Clone the first image to get its dimensions
+                "-alpha",
+                "off",  # Remove alpha channel
+                "-fill",
+                "white",  # Fill with white
+                "-colorize",
+                "100%",  # Apply colorize to make it fully white
+                ")",  # End the image list
+            ]
+        )
+
+        # Create a flattened version
+        cmd.extend(
+            [
+                "(",  # Start a new image list
+                "-clone",
+                f"{len(processed_images)},1-{len(processed_images) - 1},0",  # Clone in specific order: white bg, other images, base
+                "-background",
+                "none",  # Set background to transparent
+                "-flatten",  # Flatten the images
+                "-alpha",
+                "off",  # Remove alpha channel
+                ")",  # End the image list
+            ]
+        )
+
+        # Reverse the order to make the base image at the bottom
+        cmd.append("-reverse")
+
+        # Add the output path
+        cmd.append(output)
+
+        if verbose:
+            print("Running command:", " ".join(cmd))
+
+        # Execute the command
+        try:
+            subprocess.run(cmd, check=True)
+            if verbose:
+                print(f"Created layered PSD file: {output}")
+            return output
+        except subprocess.CalledProcessError as e:
+            print(f"Error creating layered PSD: {e}")
+            raise
+
+
+def main():
+    """CLI entry point using Fire."""
+    fire.Fire(create_layered_psd)
+
+
+if __name__ == "__main__":
+    main()

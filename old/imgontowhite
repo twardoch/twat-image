@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+
+# /// script
+# dependencies = ["imagemagick"]
+# this_file: scripts/composite-on-white.sh
+# ///
+
+# Usage: ./composite-on-white.sh input.png [output.png]
+
+set -euo pipefail
+
+if [ $# -eq 0 ]; then
+    echo "Error: Missing input file"
+    echo "Usage: $(basename "$0") input.png [output.png]"
+    exit 1
+fi
+
+input="$1"
+output="${2:-}"
+
+if [[ -z "$output" ]]; then
+    dir="$(dirname "$input")"
+    base="$(basename "$input" .png)"
+    output="$dir/${base}-onwhite.png"
+fi
+
+# Composite input onto a white background and save as opaque PNG
+magick "$input" -background white -alpha remove -alpha off "$output"
+
+echo "Saved composited image to: $output"

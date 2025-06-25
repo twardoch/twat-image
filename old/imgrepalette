@@ -1,0 +1,1162 @@
+#!/usr/bin/env -S uv run -s
+# /// script
+# dependencies = ["fire", "rich", "pillow", "numpy", "scipy", "numba", "twat-mp[pathos]"]
+# this_file: ~/bin/imgrepalette.py
+
+"""
+A Python CLI tool to recolor an image with a user-supplied palette.
+Accepts either a single image file or a directory as input.
+If a directory is provided, it recursively processes all .png and .jpg files.
+
+Usage (examples):
+  # Single image
+  python imgrepalette.py --input_path=some_pic.png \\
+                          --colors=FF0000-00FF00-0000FF \\
+                          --output_path=my_output.png \\
+                          --tool=fast \\
+                          --verbose=True
+
+  # Directory input (output path must be a directory)
+  python imgrepalette.py --input_path=./input_folder \\
+                          --colors=FFCC00-9900FF-333333 \\
+                          --output_path=./output_folder \\
+                          --tool=smooth
+
+Features:
+1) --tool=fast (default):
+   - Convert to Lab, build a cKDTree from the palette, map each pixel
+     to the nearest palette color in Lab space (fastest).
+2) --tool=interp:
+   - Same Lab approach but first expand the palette with interpolated
+     colors between each adjacent pair in the given palette.
+     Then map each pixel to the nearest color.
+3) --tool=dither:
+   - Naive nearest-color approach plus Floyd-Steinberg dithering
+     to preserve gradients and detail.
+4) --tool=smooth:
+   - Preserves original luminance while modifying hue/saturation.
+   - Sorts palette by hue and creates expanded palette with interpolated
+     colors between adjacent palette entries.
+   - For each pixel, finds the closest match in hue/saturation space.
+   - Uses --shades parameter to control interpolation granularity.
+5) --tool=lum_fast:
+   - Like fast but preserves original luminance of the image.
+6) --tool=lum_interp:
+   - Like interp but preserves original luminance of the image.
+7) --tool=all:
+   - Runs all tools and saves each result.
+   - If input is a file, --output_path is the output folder.
+   - If input is a directory, --output_path is the root output folder.
+   - Outputs are organized based on tool and input file structure.
+
+Notes:
+ - The user must supply at least 3 distinct palette colors in RRGGBB format,
+   separated by dashes (e.g. "FFCC00-9900FF-333333").
+ - If --output_path is not specified for a single file input, defaults to
+   {input_path_without_ext}--{colors}--{tool}.png
+ - If --output_path is not specified for a directory input, defaults to
+   {input_path}_recolored/
+ - This script uses a perceptual color space (CIELAB) for better results.
+"""
+
+import logging
+import os
+import numpy as np
+from PIL import Image, UnidentifiedImageError
+import fire
+from rich import print
+from scipy.spatial import cKDTree
+import colorsys
+from pathlib import Path
+from functools import partial
+from twat_mp import (
+    ProcessPool,
+    ThreadPool,
+)  # Using ProcessPool for CPU-bound, ThreadPool maybe for I/O
+from typing import Any  # Import Any for the tasks list type hint
+
+try:
+    from numba import jit, prange
+
+    HAVE_NUMBA = True
+except ImportError:
+    HAVE_NUMBA = False
+
+    def jit(*args, **kwargs):
+        # Fallback dummy decorator if numba isn't available
+        def decorator(func):
+            return func
+
+        return decorator if args and callable(args[0]) else decorator
+
+    # Define prange as range if numba isn't available
+    prange = range
+
+try:
+    from skimage import color as skcolor
+except ImportError:
+    skcolor = None
+
+
+def parse_palette_string(colors: str) -> list[tuple[int, int, int]]:
+    """
+    Parse palette string "RRGGBB-RRGGBB-..." into a list of (R,G,B) tuples.
+    Raises ValueError if fewer than 3 colors or invalid format.
+    """
+    parts = colors.strip().split("-")
+    if len(parts) < 3:
+        raise ValueError("At least three colors are required (got fewer than 3).")
+    palette_rgb = []
+    for part in parts:
+        part = part.strip()
+        if len(part) != 6:
+            raise ValueError(f"Invalid color '{part}'. Must be 6 hex chars.")
+        r = int(part[0:2], 16)
+        g = int(part[2:4], 16)
+        b = int(part[4:6], 16)
+        palette_rgb.append((r, g, b))
+    return palette_rgb
+
+
+def rgb_to_lab(rgb_array: np.ndarray) -> np.ndarray:
+    """
+    Convert an array of RGB values [0..255] to Lab. Expects shape (..., 3).
+    Returns Lab in float64.
+    Uses skimage if available, otherwise a naive fallback (less accurate).
+    """
+    # Normalize to [0,1]
+    arr = rgb_array.astype(np.float32) / 255.0
+
+    if skcolor is not None:
+        lab = skcolor.rgb2lab(arr)
+        return lab
+    else:
+        # Basic approximate conversion if skimage is not installed
+        # (for demonstration; not fully colorimetric)
+        # We'll just do a rough transform to Lab.
+        # For real usage, consider installing skimage.
+        out = np.zeros((arr.shape[0], 3), dtype=np.float64)
+        for i, px_norm in enumerate(arr):  # arr is already normalized [0,1]
+            # px_norm is [r, g, b] in [0..1]
+            h, l, s = colorsys.rgb_to_hls(*px_norm)
+            # We'll store: L in [0..100], a in [-128..127], b in [-128..127]
+            L_approx = l * 100
+            a_approx = (s * np.cos(2 * np.pi * h)) * 128
+            b_approx = (s * np.sin(2 * np.pi * h)) * 128
+            out[i] = [L_approx, a_approx, b_approx]
+        return out  # Return the numpy array
+
+
+def lab_to_rgb(lab_array: np.ndarray) -> np.ndarray:
+    """
+    Convert Lab array back to RGB in [0..255].
+    Uses skimage if available, fallback otherwise.
+    """
+    if skcolor is not None:
+        rgb = skcolor.lab2rgb(lab_array)
+        rgb_clamped = np.clip(rgb, 0, 1) * 255
+        return rgb_clamped.astype(np.uint8)
+    else:
+        # Very approximate fallback
+
+        out = []
+        for px in lab_array:
+            # px is [L, a, b]
+            L_scaled = px[0] / 100.0
+            # We'll interpret a,b as 2D polar coords for hue, saturation
+            # This is extremely rough
+            r = np.clip(L_scaled + (px[1] / 255.0), 0, 1)
+            g = np.clip(L_scaled, 0, 1)
+            b = np.clip(L_scaled + (px[2] / 255.0), 0, 1)
+            out.append([r * 255, g * 255, b * 255])
+        return np.array(out, dtype=np.uint8)
+
+
+def build_interpolated_palette(
+    palette_rgb: list[tuple[int, int, int]], steps: int = 8
+) -> list[tuple[int, int, int]]:
+    """
+    Given an original palette, produce a denser set of colors by
+    interpolating between consecutive palette entries in Lab space.
+    steps=8 means each pair is subdivided into 8 intervals.
+    """
+    # Convert palette to Lab for interpolation
+    lab_list = rgb_to_lab(np.array(palette_rgb))
+    # We'll accumulate new colors
+    new_lab = []
+    for i in range(len(lab_list) - 1):
+        c0, c1 = lab_list[i], lab_list[i + 1]
+        for s in range(steps):
+            alpha = s / steps
+            blended = c0 * (1 - alpha) + c1 * (alpha)
+            new_lab.append(blended)
+    # Add the last color explicitly
+    new_lab.append(lab_list[-1])
+    # Convert back to RGB
+    new_lab_array = np.array(new_lab)
+    expanded_rgb = lab_to_rgb(new_lab_array)
+    # Convert to list of tuples
+    out_list = [tuple(color.tolist()) for color in expanded_rgb]
+    return out_list
+
+
+def recolor_fast(
+    img: Image.Image, palette_rgb: list[tuple[int, int, int]]
+) -> Image.Image:
+    """
+    Convert the image to Lab, build a cKDTree with the palette,
+    map each pixel to the nearest palette color in Lab space,
+    then return the recolored image.
+    This is a fast approach (default).
+    """
+    arr = np.array(img.convert("RGB"), dtype=np.uint8).reshape(-1, 3)
+    lab_arr = rgb_to_lab(arr)
+
+    # Convert palette to Lab
+    palette_arr = np.array(palette_rgb, dtype=np.uint8)
+    palette_lab = rgb_to_lab(palette_arr)
+    tree = cKDTree(palette_lab)
+
+    # For each pixel, find nearest palette color
+    _, idxs = tree.query(lab_arr, k=1)
+    new_rgb = palette_arr[idxs]
+
+    # Reshape back to image
+    new_rgb = new_rgb.reshape((img.height, img.width, 3))
+    out_img = Image.fromarray(new_rgb, mode="RGB")
+    return out_img
+
+
+def recolor_interpolate(
+    img: Image.Image, palette_rgb: list[tuple[int, int, int]], steps: int = 8
+) -> Image.Image:
+    """
+    Builds an expanded palette by interpolating between consecutive
+    palette colors in Lab space. Then does a nearest-color assignment
+    in Lab. Helps reduce "posterized" looks.
+    """
+    expanded = build_interpolated_palette(palette_rgb, steps=steps)
+    return recolor_fast(img, expanded)
+
+
+def recolor_dither(
+    img: Image.Image, palette_rgb: list[tuple[int, int, int]]
+) -> Image.Image:
+    """
+    Use Pillow's built-in quantize + dithering to map an image to a
+    user palette. It's in 8-bit RGB space, not strictly Lab, but
+    is a quick demonstration. A more advanced approach would do
+    Floyd-Steinberg in Lab by hand.
+    """
+    # Build a palette image in Pillow
+    # Note: Pillow expects up to 256 colors as an 8-bit palette
+    # We'll trim or pad if needed
+    max_colors = 256
+    pal_img = Image.new("P", (max_colors, 1))
+    # Convert palette to a 768-length bytes for R,G,B
+    # If palette has fewer than 256 colors, fill with zeros
+    palette_list = []
+    for r, g, b in palette_rgb[:max_colors]:
+        palette_list.extend([r, g, b])
+    # pad
+    palette_list.extend([0, 0, 0] * (max_colors - len(palette_rgb[:max_colors])))
+    pal_img.putpalette(palette_list, rawmode="RGB")
+
+    # Convert input to RGB
+    img_rgb = img.convert("RGB")
+    # Quantize with dithering
+    # FLOYDSTEINBERG is the default in Pillow for "quantize()"
+    if hasattr(Image, "FLOYDSTEINBERG"):
+        dither_method = Image.FLOYDSTEINBERG
+    else:
+        # Newer Pillow versions use Dither.FLOYDSTEINBERG
+        dither_method = Image.Dither.FLOYDSTEINBERG
+
+    out = img_rgb.quantize(palette=pal_img, dither=dither_method)
+    # Convert back to 'RGB' to get a standard image
+    return out.convert("RGB")
+
+
+def build_hue_sorted_expanded_palette(
+    palette_rgb: list[tuple[int, int, int]], shades: int = 253
+) -> list[tuple[int, int, int]]:
+    """
+    Build an expanded palette by:
+    1. Sort palette colors by hue
+    2. Interpolate 'shades' steps between each pair
+    3. Return the expanded palette
+
+    This creates a smooth hue wheel for better recoloring results
+    when we want to preserve luminance but adapt hue/saturation.
+    """
+    # Convert RGB tuples to HSV for sorting by hue
+    palette_hsv = []
+    for r, g, b in palette_rgb:
+        h, s, v = colorsys.rgb_to_hsv(r / 255, g / 255, b / 255)
+        palette_hsv.append((h, s, v, (r, g, b)))  # Keep original RGB for reference
+
+    # Sort by hue
+    palette_hsv.sort(key=lambda x: x[0])
+
+    # Build expanded palette with original colors + interpolated shades
+    expanded_palette = []
+
+    # Add all original colors to output
+    sorted_palette_rgb = [item[3] for item in palette_hsv]
+
+    # For each pair of adjacent colors, interpolate
+    for i in range(len(sorted_palette_rgb)):
+        # Add the current color
+        r1, g1, b1 = sorted_palette_rgb[i]
+        expanded_palette.append((r1, g1, b1))
+
+        # Get next color (wrapping around to first if at the end)
+        next_idx = (i + 1) % len(sorted_palette_rgb)
+        r2, g2, b2 = sorted_palette_rgb[next_idx]
+
+        # Convert to HSV for interpolation
+        h1, s1, v1 = colorsys.rgb_to_hsv(r1 / 255, g1 / 255, b1 / 255)
+        h2, s2, v2 = colorsys.rgb_to_hsv(r2 / 255, g2 / 255, b2 / 255)
+
+        # Handle the case where we wrap around the hue circle
+        if h2 < h1:
+            h2 += 1.0
+
+        # Interpolate shades between the two colors
+        for j in range(1, shades + 1):
+            t = j / (shades + 1)
+            h = h1 + t * (h2 - h1)
+            s = s1 + t * (s2 - s1)
+            v = v1 + t * (v2 - v1)
+
+            # Handle wraparound for hue
+            if h >= 1.0:
+                h -= 1.0
+
+            # Convert back to RGB
+            r_val, g_val, b_val = colorsys.hsv_to_rgb(h, s, v)
+            expanded_palette.append(
+                (int(r_val * 255), int(g_val * 255), int(b_val * 255))
+            )
+
+    return expanded_palette
+
+
+# JIT compile the inner loop of the color matching
+@jit(nopython=True, parallel=True)
+def _find_best_hsv_match_numba(
+    img_pixels_hsv, palette_hsv, output_rgb, output_indices, batch_size
+):
+    """
+    Numba-optimized function to find best HSV matches with preserved luminance.
+
+    Args:
+        img_pixels_hsv: Image pixels in HSV format (Nx3 array)
+        palette_hsv: Palette colors in HSV format (Mx3 array)
+        output_rgb: Output array to store RGB results (Nx3 array)
+        output_indices: Output indices to track which palette color was chosen
+        batch_size: Number of pixels to process
+    """
+    # Process each pixel
+    for i in prange(batch_size):
+        h_val, s_val, v_val = img_pixels_hsv[i]
+        best_idx = 0
+        best_dist = 2.0  # Max possible distance is 2.0 (hue is [0,1], sat is [0,1])
+
+        # Find best match by hue and saturation only
+        for j in range(len(palette_hsv)):
+            ph, ps, _ = palette_hsv[j]
+
+            # Handle hue wraparound (it's a circle)
+            h_dist = min(abs(h_val - ph), 1.0 - abs(h_val - ph))
+            s_dist = abs(s_val - ps)
+
+            # Weight hue more than saturation (70/30 split)
+            dist = h_dist * 0.7 + s_dist * 0.3
+
+            if dist < best_dist:
+                best_dist = dist
+                best_idx = j
+
+        # Use palette's hue and saturation with original value
+        new_h, new_s = palette_hsv[best_idx][0], palette_hsv[best_idx][1]
+        output_indices[i] = best_idx
+
+        # Convert HSV back to RGB (manually, since we can't use colorsys in numba)
+        # This is the HSV to RGB conversion algorithm
+        if s_val == 0.0:
+            # Achromatic (gray)
+            output_rgb[i, 0] = int(v_val * 255)
+            output_rgb[i, 1] = int(v_val * 255)
+            output_rgb[i, 2] = int(v_val * 255)
+        else:
+            # Colorful pixel
+            h = new_h * 6.0
+            if h >= 6.0:
+                h = 0.0
+
+            i_part = int(h)
+            f_part = h - i_part
+
+            p = v_val * (1.0 - new_s)
+            q = v_val * (1.0 - new_s * f_part)
+            t = v_val * (1.0 - new_s * (1.0 - f_part))
+
+            if i_part == 0:
+                r, g, b = v_val, t, p
+            elif i_part == 1:
+                r, g, b = q, v_val, p
+            elif i_part == 2:
+                r, g, b = p, v_val, t
+            elif i_part == 3:
+                r, g, b = p, q, v_val
+            elif i_part == 4:
+                r, g, b = t, p, v_val  # type: ignore
+            else:
+                r, g, b = v_val, p, q  # type: ignore
+
+            output_rgb[i, 0] = int(r * 255)
+            output_rgb[i, 1] = int(g * 255)
+            output_rgb[i, 2] = int(b * 255)
+
+
+def recolor_smooth(
+    img: Image.Image, palette_rgb: list[tuple[int, int, int]], shades: int = 253
+) -> Image.Image:
+    """
+    Recolors an image while preserving the original luminance.
+    1. Converts image to HSV
+    2. Creates expanded palette sorted by hue
+    3. For each pixel, finds closest palette color by HS (ignoring V)
+    4. Applies new H,S with original V to preserve luminance
+
+    This implementation uses vectorized operations and Numba JIT
+    compilation for significantly improved performance.
+    """
+    # Convert image to RGB array
+    img_rgb = np.array(img.convert("RGB"))
+    h, w, _ = img_rgb.shape
+
+    # Get expanded palette
+    expanded_palette = build_hue_sorted_expanded_palette(palette_rgb, shades)
+    expanded_palette_rgb = np.array(expanded_palette, dtype=np.uint8)
+
+    # Create lookup tables for HSV values
+    palette_hsv = np.zeros((len(expanded_palette), 3), dtype=np.float32)
+
+    # Convert RGB palette to HSV
+    for i, color in enumerate(expanded_palette):
+        r, g, b = color
+        h_val, s_val, v_val = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+        palette_hsv[i] = [h_val, s_val, v_val]
+
+    # Process the image in batches
+    batch_size = 100000  # Increased batch size with Numba optimization
+    total_pixels = h * w
+
+    # Final result array
+    result = np.zeros_like(img_rgb)
+
+    logging.debug("Starting color mapping with JIT-compiled processing...")
+
+    # Process in batches
+    for start_idx in range(0, total_pixels, batch_size):
+        end_idx = min(start_idx + batch_size, total_pixels)
+        logging.debug(f"Processing pixels {start_idx}-{end_idx} of {total_pixels}")
+
+        # Get batch of pixels
+        y_indices = (np.arange(start_idx, end_idx) // w).astype(np.int32)
+        x_indices = (np.arange(start_idx, end_idx) % w).astype(np.int32)
+
+        batch_size_actual = end_idx - start_idx
+        batch_rgb = img_rgb[y_indices, x_indices]
+
+        # Convert batch to HSV
+        batch_hsv = np.zeros((batch_size_actual, 3), dtype=np.float32)
+        for i, (r, g, b) in enumerate(batch_rgb):
+            batch_hsv[i] = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+
+        # Prepare output arrays
+        output_rgb = np.zeros((batch_size_actual, 3), dtype=np.uint8)
+        output_indices = np.zeros(batch_size_actual, dtype=np.int32)
+
+        # Run Numba-optimized function if available
+        if HAVE_NUMBA:
+            # Use JIT-compiled function for massive speedup
+            _find_best_hsv_match_numba(
+                batch_hsv, palette_hsv, output_rgb, output_indices, batch_size_actual
+            )
+        else:
+            # Fallback to Python implementation
+            for i, (h_val, s_val, v_val) in enumerate(batch_hsv):
+                # Pre-compute hue distances accounting for wraparound
+                hue_dists = np.minimum(
+                    np.abs(h_val - palette_hsv[:, 0]),
+                    1.0 - np.abs(h_val - palette_hsv[:, 0]),
+                )
+
+                # Calculate saturation distances
+                sat_dists = np.abs(s_val - palette_hsv[:, 1])
+
+                # Weight the distances (hue is more important)
+                weighted_dists = hue_dists * 0.7 + sat_dists * 0.3
+
+                # Find best match
+                best_idx = np.argmin(weighted_dists)
+                output_indices[i] = best_idx
+
+                # Use hue and saturation from palette, keep original value
+                new_h, new_s = palette_hsv[best_idx][0:2]
+
+                # Convert back to RGB
+                r_val, g_val, b_val = colorsys.hsv_to_rgb(new_h, new_s, v_val)
+                output_rgb[i] = [int(r_val * 255), int(g_val * 255), int(b_val * 255)]
+
+        # Store results back in the right positions
+        for i in range(batch_size_actual):
+            y, x = y_indices[i], x_indices[i]
+            result[y, x] = output_rgb[i]
+
+    # Create new image from array
+    out_img = Image.fromarray(result, mode="RGB")
+    return out_img
+
+
+@jit(nopython=True, parallel=True)
+def _find_nearest_hs_match_numba(img_hsv, palette_hsv, result_rgb, batch_size):
+    """
+    Numba-optimized function to find best HS matches while preserving luminance.
+
+    Args:
+        img_hsv: Image pixels in HSV format (Nx3 array)
+        palette_hsv: Palette colors in HSV format (Mx3 array)
+        result_rgb: Output array to store RGB results (Nx3 array)
+        batch_size: Number of pixels to process
+    """
+    # Process each pixel
+    for i in prange(batch_size):
+        h_val, s_val, v_val = img_hsv[i]
+        best_idx = 0
+        best_dist = 2.0  # Max possible distance is 2.0 (hue is [0,1], sat is [0,1])
+
+        # Find best match by hue and saturation only
+        for j in range(len(palette_hsv)):
+            ph, ps, _ = palette_hsv[j]
+
+            # Handle hue wraparound (it's a circle)
+            h_dist = min(abs(h_val - ph), 1.0 - abs(h_val - ph))
+            s_dist = abs(s_val - ps)
+
+            # Weight hue more than saturation (70/30 split)
+            dist = h_dist * 0.7 + s_dist * 0.3
+
+            if dist < best_dist:
+                best_dist = dist
+                best_idx = j
+
+        # Use palette's hue and saturation with original value
+        new_h, new_s = palette_hsv[best_idx][0], palette_hsv[best_idx][1]
+
+        # Convert HSV back to RGB (manually, since we can't use colorsys in numba)
+        # This is the HSV to RGB conversion algorithm
+        if s_val == 0.0:
+            # Achromatic (gray)
+            result_rgb[i, 0] = int(v_val * 255)
+            result_rgb[i, 1] = int(v_val * 255)
+            result_rgb[i, 2] = int(v_val * 255)
+        else:
+            # Colorful pixel
+            h = new_h * 6.0
+            if h >= 6.0:
+                h = 0.0
+
+            i_part = int(h)
+            f_part = h - i_part
+
+            p = v_val * (1.0 - new_s)
+            q = v_val * (1.0 - new_s * f_part)
+            t = v_val * (1.0 - new_s * (1.0 - f_part))
+
+            if i_part == 0:
+                r_val, g_val, b_val = v_val, t, p
+            elif i_part == 1:
+                r_val, g_val, b_val = q, v_val, p
+            elif i_part == 2:
+                r_val, g_val, b_val = p, v_val, t
+            elif i_part == 3:
+                r_val, g_val, b_val = p, q, v_val
+            elif i_part == 4:
+                r_val, g_val, b_val = t, p, v_val  # type: ignore
+            else:
+                r_val, g_val, b_val = v_val, p, q  # type: ignore
+
+            result_rgb[i, 0] = int(r_val * 255)
+            result_rgb[i, 1] = int(g_val * 255)
+            result_rgb[i, 2] = int(b_val * 255)
+
+
+def recolor_lum_fast(
+    img: Image.Image, palette_rgb: list[tuple[int, int, int]]
+) -> Image.Image:
+    """
+    Convert the image to HSV, map each pixel to the nearest palette color in HS space,
+    preserve original luminance (V), and return the recolored image.
+
+    This is a fast luminance-preserving approach that uses Numba if available.
+    """
+    # Convert image to RGB array
+    img_rgb = np.array(img.convert("RGB"))
+    h, w, _ = img_rgb.shape
+    img_rgb_flat = img_rgb.reshape(-1, 3)
+    total_pixels = img_rgb_flat.shape[0]
+
+    # Convert to HSV space
+    img_hsv = np.zeros((total_pixels, 3), dtype=np.float32)
+    for i, (r, g, b) in enumerate(img_rgb_flat):
+        img_hsv[i] = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+
+    # Convert palette to HSV
+    palette_hsv = np.zeros((len(palette_rgb), 3), dtype=np.float32)
+    for i, (r, g, b) in enumerate(palette_rgb):
+        palette_hsv[i] = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+
+    # Set up result array
+    result_rgb = np.zeros_like(img_rgb_flat, dtype=np.uint8)
+
+    # If we have Numba, use it for massive speedup
+    if HAVE_NUMBA:
+        logging.debug("Using Numba JIT compilation for lum_fast")
+        _find_nearest_hs_match_numba(img_hsv, palette_hsv, result_rgb, total_pixels)
+    else:
+        logging.debug("Numba not available, using slower Python implementation")
+        # Build KDTree with just H and S components for matching
+        tree = cKDTree(palette_hsv[:, :2])  # Just Hue and Saturation
+
+        # For each pixel, find nearest palette color by HS only
+        _, idxs = tree.query(img_hsv[:, :2], k=1)
+
+        # Apply new HS, keep original V
+        for i, (_, _, v) in enumerate(img_hsv):
+            # Get the best-match palette color (HS)
+            new_h, new_s, _ = palette_hsv[idxs[i]]
+
+            # Convert to RGB with original V
+            r_val, g_val, b_val = colorsys.hsv_to_rgb(new_h, new_s, v)  # type: ignore
+            result_rgb[i] = [int(r_val * 255), int(g_val * 255), int(b_val * 255)]
+
+    # Reshape back to image
+    result_rgb = result_rgb.reshape((h, w, 3))
+    out_img = Image.fromarray(result_rgb, mode="RGB")
+    return out_img
+
+
+def recolor_lum_interp(
+    img: Image.Image, palette_rgb: list[tuple[int, int, int]]
+) -> Image.Image:
+    """
+    Convert the image to HSV, map each pixel to the nearest palette color in HS space,
+    preserve original luminance (V), and return the recolored image.
+
+    This is like the interp algorithm but preserves luminance. It first expands
+    the palette through interpolation, making smoother gradients possible.
+    """
+    # Convert image to RGB array
+    img_rgb = np.array(img.convert("RGB"))
+    h, w, _ = img_rgb.shape
+    img_rgb_flat = img_rgb.reshape(-1, 3)
+    total_pixels = img_rgb_flat.shape[0]
+
+    # Convert to HSV space
+    img_hsv = np.zeros((total_pixels, 3), dtype=np.float32)
+    for i, (r, g, b) in enumerate(img_rgb_flat):
+        img_hsv[i] = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+
+    # Convert palette to HSV and expand it with interpolated colors
+    palette_hsv_list = []
+    for r, g, b in palette_rgb:
+        h_val, s_val, v_val = colorsys.rgb_to_hsv(r / 255.0, g / 255.0, b / 255.0)
+        palette_hsv_list.append((h_val, s_val, v_val))
+
+    # Sort palette by hue to make interpolation more predictable
+    palette_hsv_list.sort(key=lambda x: x[0])
+
+    # Create expanded palette by interpolating between adjacent colors
+    expanded_hsv = []
+    for i in range(len(palette_hsv_list)):
+        h1, s1, v1 = palette_hsv_list[i]
+        h2, s2, v2 = palette_hsv_list[(i + 1) % len(palette_hsv_list)]
+
+        # Add original color
+        expanded_hsv.append((h1, s1, v1))
+
+        # Handle hue wraparound when interpolating
+        if abs(h2 - h1) > 0.5:
+            # Wraparound case (e.g. interpolating between red and purple)
+            if h1 > h2:
+                h2 += 1.0  # Wrap h2 around
+            else:
+                h1 += 1.0  # Wrap h1 around
+
+        # Add 8 interpolated colors between each pair
+        for j in range(1, 9):
+            t = j / 9.0  # Interpolation parameter [0,1]
+            h_mid = (h1 * (1 - t) + h2 * t) % 1.0  # Keep hue in [0,1] range
+            s_mid = s1 * (1 - t) + s2 * t
+            v_mid = v1 * (1 - t) + v2 * t
+            expanded_hsv.append((h_mid, s_mid, v_mid))
+
+    # Convert expanded palette to array
+    palette_hsv = np.array(expanded_hsv, dtype=np.float32)
+
+    # Set up result array
+    result_rgb = np.zeros_like(img_rgb_flat, dtype=np.uint8)
+
+    # Build KDTree with just H and S components for matching
+    tree = cKDTree(palette_hsv[:, :2])  # Just Hue and Saturation
+
+    # For each pixel, find nearest palette color by HS only
+    _, idxs = tree.query(img_hsv[:, :2], k=1)
+
+    # Apply new HS, keep original V
+    for i, (_, _, v) in enumerate(img_hsv):
+        # Get the best-match palette color (HS)
+        new_h, new_s, _ = palette_hsv[idxs[i]]
+
+        # Convert to RGB with original V
+        r_val, g_val, b_val = colorsys.hsv_to_rgb(new_h, new_s, v)  # type: ignore
+        result_rgb[i] = [int(r_val * 255), int(g_val * 255), int(b_val * 255)]
+
+    # Reshape back to image dimensions
+    result_rgb_reshaped = result_rgb.reshape((h, w, 3))
+    out_img = Image.fromarray(result_rgb_reshaped, mode="RGB")
+    return out_img
+
+
+def cli(
+    input_path: str,
+    colors: str,
+    output_path: str | None = None,
+    tool: str = "fast",
+    shades: int = 253,
+    verbose: bool = False,
+) -> None:
+    """
+    Recolor an image or directory of images to a specified palette.
+
+    Args:
+        input_path: Path to input image file or directory
+        colors: Palette string "RRGGBB-RRGGBB-RRGGBB-..."
+        output_path: Output path (file or directory)
+        tool: Which method to use? ["fast", "interp", "dither", "smooth", "lum_fast", "lum_interp", "all"]
+        shades: Number of interpolation steps between colors for 'smooth' mode
+        verbose: Show debug logs if True
+    """
+    log_level = logging.DEBUG if verbose else logging.INFO
+    logging.basicConfig(
+        level=log_level, format="%(asctime)s - %(levelname)s - %(message)s"
+    )
+    logging.debug(f"Using tool={tool}, input_path={input_path}, colors={colors}")
+
+    palette_rgb = parse_palette_string(colors)
+    input_p = Path(input_path)
+
+    if not input_p.exists():
+        raise FileNotFoundError(f"Input path not found: {input_path}")
+
+    is_input_dir = input_p.is_dir()
+
+    # --- Determine output base path and create directories ---
+    output_p: Path | None = Path(output_path) if output_path else None
+    if is_input_dir:
+        if output_p is None:
+            output_p = Path(f"{input_path}_recolored")
+            logging.info(f"Output path not specified, using default: {output_p}")
+        if output_p.exists() and not output_p.is_dir():
+            raise ValueError(
+                f"Input is a directory, but output path exists and is not a directory: {output_p}"
+            )
+        output_p.mkdir(parents=True, exist_ok=True)
+    elif output_p and output_p.suffix == "" and tool == "all":
+        # Input is file, tool is 'all', output is treated as dir
+        output_p.mkdir(parents=True, exist_ok=True)
+    elif output_p and output_p.suffix == "":
+        # Input is file, tool is not 'all', output is dir? Ambiguous, raise error or assume filename?
+        # Let's assume the user wants to specify the full output file path here.
+        # If they provide a dir, the filename generation logic below will handle it.
+        pass  # Allow specifying a directory, filename will be generated
+
+    # --- Define the core processing function for a single image ---
+    def _process_single_image(
+        input_file: Path,
+        output_file: Path,
+        palette: list[tuple[int, int, int]],
+        process_tool: str,
+        process_shades: int,
+    ) -> tuple[str, str | None]:
+        """Processes one image file with one tool."""
+        try:
+            logging.debug(
+                f"Processing {input_file} with tool {process_tool} -> {output_file}"
+            )
+            img = Image.open(input_file)
+            out_img = None
+
+            if process_tool == "fast":
+                out_img = recolor_fast(img, palette)
+            elif process_tool == "interp":
+                out_img = recolor_interpolate(img, palette)
+            elif process_tool == "dither":
+                out_img = recolor_dither(img, palette)
+            elif process_tool == "smooth":
+                if HAVE_NUMBA:
+                    logging.debug("Using Numba JIT for smooth tool")
+                else:
+                    logging.warning("Numba not available for smooth tool, slower")
+                out_img = recolor_smooth(img, palette, process_shades)
+            elif process_tool == "lum_fast":
+                out_img = recolor_lum_fast(img, palette)
+            elif process_tool == "lum_interp":
+                out_img = recolor_lum_interp(img, palette)
+            else:
+                logging.error(
+                    f"Unknown tool '{process_tool}' encountered during processing."
+                )
+                return (
+                    str(input_file),
+                    f"Unknown tool: {process_tool}",
+                )  # Should not happen if validated before
+
+            if out_img:
+                output_file.parent.mkdir(parents=True, exist_ok=True)
+                out_img.save(output_file)
+                logging.info(f"Saved {process_tool} result to {output_file}")
+                return str(input_file), None  # Success
+            else:
+                return str(input_file), "Processing function returned None"
+
+        except Exception as e:
+            logging.error(
+                f"Error processing {input_file} with tool {process_tool}: {e}",
+                exc_info=verbose,
+            )
+            return str(input_file), str(e)  # Failure
+
+    # --- Define a function to process one image with ALL tools ---
+    def _process_one_image_all_tools(
+        input_file: Path,
+        output_dir_for_image: Path,  # Dedicated dir for this image's results
+        palette: list[tuple[int, int, int]],
+        process_shades: int,
+        valid_tools: list[str],
+    ) -> tuple[str, list[str]]:
+        """Processes one image file: standard tools in parallel (ThreadPool), Numba tools sequentially."""
+        errors = []
+        output_dir_for_image.mkdir(parents=True, exist_ok=True)
+        logging.debug(
+            f"Processing tools for {input_file} -> {output_dir_for_image} (standard parallel, numba sequential)"
+        )
+        img = None
+        try:
+            img = Image.open(input_file)  # Load image once
+            # Maybe force loading data to release file handle?
+            img.load()
+        except UnidentifiedImageError:
+            logging.error(
+                f"Cannot identify image file format for {input_file}. Skipping."
+            )
+            return str(input_file), ["Cannot identify image format"]
+        except (IOError, OSError) as e:
+            # Catch potential corrupt data errors or other I/O issues
+            logging.error(f"Error loading image {input_file}: {e}", exc_info=verbose)
+            return str(input_file), [f"Image load error: {e}"]
+        except Exception as e:
+            # Catch any other unexpected error during load
+            logging.error(
+                f"Unexpected error loading image {input_file}: {e}", exc_info=verbose
+            )
+            return str(input_file), [f"Unexpected image load error: {e}"]
+
+        # Separate tools
+        standard_tools = [t for t in valid_tools if t not in ("smooth", "lum_fast")]
+        numba_tools = [t for t in valid_tools if t in ("smooth", "lum_fast")]
+
+        # --- Helper function to process and save one tool ---
+        def _process_and_save_tool(tool_name: str) -> str | None:
+            """Processes and saves the result for a single tool name."""
+            output_filename = (
+                f"{input_file.stem}--{colors}--{tool_name}{input_file.suffix}"
+            )
+            output_file_path = output_dir_for_image / output_filename
+            try:
+                out_img = None
+                logging.debug(f"Starting tool {tool_name} for {input_file.name}")
+                if tool_name == "fast":
+                    out_img = recolor_fast(img, palette)
+                elif tool_name == "interp":
+                    out_img = recolor_interpolate(img, palette)
+                elif tool_name == "dither":
+                    out_img = recolor_dither(img, palette)
+                elif tool_name == "smooth":  # Numba potentially used here
+                    if not HAVE_NUMBA:
+                        logging.warning(
+                            f"Numba not available for smooth tool ({input_file.name}), slower"
+                        )
+                    out_img = recolor_smooth(img, palette, process_shades)
+                elif tool_name == "lum_fast":  # Numba potentially used here
+                    if not HAVE_NUMBA:
+                        logging.warning(
+                            f"Numba not available for lum_fast tool ({input_file.name}), slower"
+                        )
+                    out_img = recolor_lum_fast(img, palette)
+                elif tool_name == "lum_interp":
+                    out_img = recolor_lum_interp(img, palette)
+
+                if out_img:
+                    out_img.save(output_file_path)
+                    logging.info(f"Saved {tool_name} result to {output_file_path}")
+                    return None  # Success
+                else:
+                    err_msg = f"Tool {tool_name} returned no image."
+                    logging.warning(f"{err_msg} for {input_file}")
+                    return err_msg
+            except Exception as e:
+                logging.error(
+                    f"Error processing {input_file} with tool {tool_name}: {e}",
+                    exc_info=verbose,
+                )
+                return f"Tool {tool_name}: {e}"
+
+        # --- Run Standard Tools in Parallel (ThreadPool) ---
+        if standard_tools:
+            logging.debug(
+                f"Running standard tools in parallel for {input_file.name}: {standard_tools}"
+            )
+            with ThreadPool() as inner_pool:
+                standard_results = list(
+                    inner_pool.map(_process_and_save_tool, standard_tools)
+                )
+            # Collect errors from standard tools
+            errors.extend([e for e in standard_results if e is not None])
+
+        # --- Run Numba Tools Sequentially ---
+        if numba_tools:
+            logging.debug(
+                f"Running Numba tools sequentially for {input_file.name}: {numba_tools}"
+            )
+            for tool_name in numba_tools:
+                numba_result = _process_and_save_tool(tool_name)
+                if numba_result is not None:
+                    errors.append(numba_result)
+
+        return str(
+            input_file
+        ), errors  # Return filename and list of errors for this image
+
+    all_valid_tools = ["fast", "interp", "dither", "smooth", "lum_fast", "lum_interp"]
+    tools_to_run = all_valid_tools if tool == "all" else [tool]
+
+    if tool != "all" and tool not in all_valid_tools:
+        raise ValueError(
+            f"Unknown tool: {tool}. Choose from {all_valid_tools + ['all']}"
+        )
+
+    tasks: list[Any] = []  # Explicit type hint for tasks list
+    worker_func = None  # Function to be called by pool.map
+
+    if is_input_dir:
+        # --- Handle Directory Input ---
+        logging.info(f"Scanning directory {input_p} for images...")
+        image_files = (
+            list(input_p.rglob("*.png"))
+            + list(input_p.rglob("*.jpg"))
+            + list(input_p.rglob("*.jpeg"))
+        )
+
+        if not image_files:
+            print(f"[yellow]No .png or .jpg images found in {input_p}[/yellow]")
+            return
+
+        logging.info(f"Found {len(image_files)} images to process.")
+
+        if tool == "all":
+            # Special case: Directory input, process all tools for each image
+            # We parallelize over images, each worker processes all tools for one image.
+            assert isinstance(output_p, Path), (
+                "output_p must be a Path in directory mode"
+            )
+            tasks = []
+            for input_file in image_files:
+                relative_path = input_file.relative_to(input_p)
+                # Output goes into a subfolder named after the image (without extension)
+                # within the relative structure.
+                output_dir_for_this_image = (
+                    output_p / relative_path.parent / input_file.stem
+                )
+                tasks.append(
+                    (
+                        input_file,
+                        output_dir_for_this_image,
+                        palette_rgb,
+                        shades,
+                        all_valid_tools,
+                    )
+                )
+
+            def worker_all_tools(task_args):
+                # Unpack args for _process_one_image_all_tools
+                in_f, out_dir, pal, s, v_tools = task_args
+                return _process_one_image_all_tools(in_f, out_dir, pal, s, v_tools)
+
+            worker_func = worker_all_tools
+
+        else:
+            # Directory input, single tool: Parallelize over (image, tool) pairs
+            for input_file in image_files:
+                relative_path = input_file.relative_to(input_p)
+                input_base_name = input_file.stem
+
+                # Ensure output_p is Path for type checker
+                assert isinstance(output_p, Path), (
+                    "output_p must be a Path in directory mode"
+                )
+
+                # Determine output path for the single tool
+                output_subdir = output_p / relative_path.parent
+                # Use the single tool specified in 'tool' var
+                output_filename = (
+                    f"{input_base_name}--{colors}--{tool}{input_file.suffix}"
+                )
+                output_file_path = output_subdir / output_filename
+
+                # Add task arguments for _process_single_image
+                tasks.append((input_file, output_file_path, palette_rgb, tool, shades))
+
+            # Define the worker for single-tool processing
+            def worker_single_tool(task_args):
+                # Unpack arguments for _process_single_image
+                in_f, out_f, pal, t, s = task_args
+                return _process_single_image(in_f, out_f, pal, t, s)
+
+            worker_func = worker_single_tool
+
+    else:
+        # --- Handle Single File Input ---
+        input_file = input_p
+        input_base_name = input_file.stem
+        input_suffix = input_file.suffix
+
+        for current_tool in tools_to_run:
+            # Determine output path
+            if output_p:
+                if tool == "all":
+                    # Output path is a directory for all tools
+                    # Ensure it exists (handled earlier)
+                    assert output_p.is_dir(), (
+                        "output_p must be a directory for tool='all' with file input"
+                    )
+                    output_file_path = (
+                        output_p
+                        / f"{input_base_name}--{colors}--{current_tool}{input_suffix}"
+                    )
+                elif output_p.is_dir():
+                    # Output path is a directory, generate filename
+                    output_file_path = (
+                        output_p
+                        / f"{input_base_name}--{colors}--{current_tool}{input_suffix}"
+                    )
+                else:
+                    # Output path is a specific file (only valid if tool != 'all')
+                    if len(tools_to_run) > 1:  # Should not happen if tool != 'all'
+                        raise ValueError(
+                            "Cannot specify a single output file when running multiple tools."
+                        )
+                    output_file_path = output_p
+            else:
+                # Default output filename generation next to input file
+                output_file_path = input_file.with_name(
+                    f"{input_base_name}--{colors}--{current_tool}{input_suffix}"
+                )
+
+            # Add task arguments for _process_single_image
+            # Single file input is always processed sequentially or via the parallel single-tool worker
+            tasks.append(
+                (input_file, output_file_path, palette_rgb, current_tool, shades)
+            )
+
+        # Define the worker for single-tool processing (also used for single file input)
+        def worker_single_tool(task_args):
+            # Unpack arguments for _process_single_image
+            in_f, out_f, pal, t, s = task_args
+            return _process_single_image(in_f, out_f, pal, t, s)
+
+        worker_func = worker_single_tool
+
+    # --- Execute Tasks ---
+    if not tasks:
+        logging.warning("No processing tasks generated.")
+        return
+
+    # We determined the correct worker_func and tasks list above
+    assert worker_func is not None, "Worker function not set"
+
+    logging.info(f"Starting processing of {len(tasks)} tasks...")
+
+    results = []
+    if len(tasks) == 1 and not is_input_dir:
+        # Optimization: If only one task (single file, single tool), run directly without pool
+        logging.debug("Running single task directly without parallel pool.")
+        results.append(worker_func(tasks[0]))
+    else:
+        # Use ProcessPool for multiple tasks (CPU-bound)
+        logging.debug(f"Using ProcessPool for {len(tasks)} tasks.")
+        with ProcessPool() as pool:
+            # Use map for eager execution and collecting all results
+            results = pool.map(worker_func, tasks)
+
+    # --- Report Results ---
+    success_count = 0
+    error_count = 0
+    # Results format depends on which worker was used
+    if tool == "all" and is_input_dir:
+        # Results are (input_file, list_of_errors)
+        for input_f, error_list in results:
+            if not error_list:
+                success_count += 1
+            else:
+                error_count += 1
+                print(f"[red]Errors processing {input_f}:[/red]")
+                for err in error_list:
+                    print(f"  - {err}")
+        total_images = len(tasks)
+        print(f"[blue]Directory processing complete for 'all' tools.[/blue]")
+        print(
+            f"[green]Images fully processed successfully: {success_count}/{total_images}.[/green]"
+        )
+        if error_count > 0:
+            print(
+                f"[red]Images with one or more errors: {error_count}/{total_images}. Check logs.[/red]"
+            )
+
+    else:
+        # Results are (input_file, error_msg | None)
+        for input_f, error_msg in results:
+            if error_msg is None:
+                success_count += 1
+            else:
+                error_count += 1
+                print(f"[red]Error processing {input_f}: {error_msg}[/red]")
+
+        print(f"[blue]Processing complete.[/blue]")
+        print(f"[green]Successfully processed: {success_count} tasks.[/green]")
+        if error_count > 0:
+            print(f"[red]Failed tasks: {error_count}. Check logs for details.[/red]")
+        else:
+            print("[green]All tasks completed without errors.[/green]")
+
+
+def main():
+    fire.Fire(cli)
+
+
+if __name__ == "__main__":
+    main()
