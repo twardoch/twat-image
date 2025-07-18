@@ -45,7 +45,6 @@ classifiers = [
 # -------------------
 # External packages required for the project to function
 dependencies = [
-    "image_utils_plugin_host>=1.8.1", # Main plugin host package
     "fire",
     "numpy",
     "pillow",
@@ -69,8 +68,8 @@ Source = "https://github.com/twardoch/image-alpha-utils"
 # Plugin Registration (Example - adjust if needed)
 # -----------------------
 # Registers this package as a plugin for a hypothetical host ecosystem
-[project.entry-points."image_utils_plugin_host.plugins"]
-image_alpha = "image_alpha_utils.gray2alpha:igray2alpha" # Example entry point
+# [project.entry-points."image_utils_plugin_host.plugins"]
+# image_alpha = "image_alpha_utils.gray2alpha:igray2alpha" # Example entry point
 
 # Command-line scripts
 # --------------------
@@ -82,7 +81,8 @@ imagealpha = "image_alpha_utils.gray2alpha:cli"
 source = "vcs"
 
 [tool.hatch.version.raw-options]
-version_scheme = "post-release"
+version_scheme = "release-branch-semver"
+local_scheme = "node-and-date"
 
 # VCS hook configuration for version file generation
 [tool.hatch.build.hooks.vcs]
@@ -103,6 +103,9 @@ test = "pytest {args:tests}"
 test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/image_alpha_utils --cov=tests {args:tests}"
 type-check = "mypy src/image_alpha_utils tests"
 lint = ["ruff check src/image_alpha_utils tests", "ruff format src/image_alpha_utils tests"]
+build = "hatch build"
+clean = "hatch clean"
+version = "hatch version"
 
 # Python version matrix for testing
 [[tool.hatch.envs.all.matrix]]
@@ -245,7 +248,6 @@ dev = [
 
 ]
 all = [
-    "image_utils_plugin_host>=1.8.1", # Main plugin host package
     "fire",
     "numpy",
     "pillow",
