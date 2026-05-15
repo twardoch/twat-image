@@ -1,14 +1,8 @@
 """twat-image: deterministic image utilities with optional AI backends."""
 # this_file: src/twat_image/__init__.py
 
-from importlib import metadata
-
+from .__version__ import __version__  # noqa: F401
 from twat_image.__main__ import main as cli_main
-
-try:
-    __version__ = metadata.version("twat-image")
-except metadata.PackageNotFoundError:
-    __version__ = "0.0.0-dev"
 
 from twat_image.genai import edit_image, generate_image
 from twat_image.gray2alpha import ColorSpec, cli, gray2alpha, igray2alpha, parse_color

@@ -1,18 +1,23 @@
 #!/usr/bin/env bash
-# publish.sh — Build, install, and publish twat-image to PyPI
-# A Python utility for converting images to include alpha channels based on grayscale values, and other image manipulations.
+# publish.sh — Build and publish to PyPI using hatch-vcs semver from git tags.
+# Order: clean → tidy (pre-commit autofixes, then commit) → bump tag → build → publish.
+# Uses `uv build` (PEP 517 via hatchling) to avoid hatch's env-plugin sync which
+# needs pip in the hatch venv. Tidying upfront keeps gitnextver's atomic commit
+# from tripping the pre-commit hook.
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR"
 
-bash "$SCRIPT_DIR/build.sh"
-bash "$SCRIPT_DIR/install.sh"
+rm -rf dist/ build/ *.egg-info
 
-echo "Tagging next version..."
-uvx gitnextver@latest
+if [[ -f .pre-commit-config.yaml ]] && command -v pre-commit >/dev/null 2>&1; then
+    pre-commit run --all-files || true
+fi
+if ! git diff --quiet || ! git diff --cached --quiet; then
+    git add -A
+    git commit -m "chore: pre-publish tidy" || true
+fi
 
-echo "Publishing to PyPI..."
-uvx hatch build
+uvx gitnextver .
+uv build
 uv publish
-
-echo "Done."

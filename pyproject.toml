@@ -41,10 +41,6 @@ classifiers = [
 # -------------------
 # External packages required for the project to function
 dependencies = [
-<<<<<<< Updated upstream
-=======
-    "twat>=1.8.1",
->>>>>>> Stashed changes
     "fire",
     "numpy",
     "pillow",
