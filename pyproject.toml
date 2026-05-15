@@ -125,7 +125,6 @@ typing = "mypy --install-types --non-interactive {args:src/twat_image tests}"
 style = ["ruff check {args:.}", "ruff format {args:.}"]
 fmt = ["ruff format {args:.}", "ruff check --fix {args:.}"]
 all = ["style", "typing"]
-
 # Ruff (linter) configuration
 [tool.ruff]
 target-version = "py310"
@@ -254,9 +253,12 @@ all = [
     "fire",
     "numpy",
     "pillow",
+    "twat-fs[all]>=2.7.7",
 ]
-
 # Test environment configuration
+upload = [
+    "twat-fs[all]>=2.7.7",
+]
 [tool.hatch.envs.test]
 dependencies = [".[test]"]
 
