@@ -1,3 +1,0 @@
-#!/usr/bin/env bash
-
-python "/Users/adam/Developer/vcs/github.twardoch/pub/huehoppy/work/imagecolortransfer" "$@"

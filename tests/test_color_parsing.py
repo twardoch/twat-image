@@ -3,11 +3,11 @@
 import pytest
 from PIL import ImageColor
 
-# Assuming the gray2alpha module is importable from image_alpha_utils
+# Assuming the gray2alpha module is importable from twat_image
 # For now, due to directory naming issue, this might require adjustment
 # or this test would run after the directory is correctly named.
-# For development, I'll write it as if image_alpha_utils is the correct path.
-from image_alpha_utils.gray2alpha import parse_color, ColorSpec
+# For development, I'll write it as if twat_image is the correct path.
+from twat_image.gray2alpha import parse_color, ColorSpec
 
 
 VALID_COLOR_SPECS: list[tuple[ColorSpec, tuple[int, int, int]]] = [
@@ -16,12 +16,6 @@ VALID_COLOR_SPECS: list[tuple[ColorSpec, tuple[int, int, int]]] = [
     ("lime", (0, 255, 0)),
     ("blue", (0, 0, 255)),
     ("WHITE", (255, 255, 255)),  # Case-insensitivity
-    ("transparent", (0, 0, 0)),  # webcolors might return this for transparent
-    # but our function is for RGB, so this might be an edge case
-    # Let's verify webcolors behavior for "transparent"
-    # webcolors.name_to_rgb("transparent") -> ValueError
-    # So, this should be an invalid case if relying on webcolors fully
-    # For now, let's assume standard color names.
     # Hex colors
     ("#FF0000", (255, 0, 0)),
     ("00FF00", (0, 255, 0)),
@@ -51,9 +45,7 @@ for name in NAMED_COLORS_TO_TEST:
     if name in CSS3_NAMES:
         # parse_color should give same result as ImageColor.getrgb
         # Our parse_color uses webcolors, which should be compatible for standard names
-        expected_rgb = ImageColor.getrgb(name)[
-            :3
-        ]  # getrgb can return RGBA, we need RGB
+        expected_rgb = ImageColor.getrgb(name)[:3]  # getrgb can return RGBA, we need RGB
         VALID_COLOR_SPECS.append((name, expected_rgb))
 
 
@@ -138,9 +130,7 @@ def test_parse_color_hex_mixed_case():
 
 # Test that the error messages are somewhat informative (optional but good)
 def test_parse_color_invalid_tuple_message():
-    with pytest.raises(
-        ValueError, match="Color must be a string or an RGB tuple, got:"
-    ):
+    with pytest.raises(ValueError, match="Color must be a string or an RGB tuple, got:"):
         parse_color((255, 0))  # type: ignore
 
 
@@ -159,15 +149,13 @@ def test_parse_color_invalid_hex_format_message():
 
 
 # Check the actual import path needed for tests.
-# Since the directory is `src/twat_image` but `pyproject.toml` says package is `src/image_alpha_utils` (after rename)
-# and `tool.hatch.build.targets.wheel.packages = ["src/image_alpha_utils"]`
-# and `tool.hatch.build.hooks.vcs.version-file = "src/image_alpha_utils/__version__.py"`
-# The tests, when run by hatch, *should* find `image_alpha_utils` correctly if the directory rename were successful.
+# Since the directory is `src/twat_image` and `pyproject.toml` includes `src/twat_image`,
+# the tests, when run by hatch, should find `twat_image` correctly.
 # Given the rename tool issue, I'll assume for now that `hatch test` might temporarily fail or require the
-# user to manually rename the directory `src/twat_image` to `src/image_alpha_utils` for tests to pass.
+# user to manually rename directories for tests to pass.
 # The code within `tests/test_color_parsing.py` should be written against the *intended* package structure.
 
-# So, `from image_alpha_utils.gray2alpha import parse_color, ColorSpec` is correct.
+# So, `from twat_image.gray2alpha import parse_color, ColorSpec` is correct.
 # If I need to run this test *before* the directory is renamed, I'd have to use
 # `from twat_image.gray2alpha import parse_color, ColorSpec`
 # But the goal is to fix the codebase, so I'll write for the target state.

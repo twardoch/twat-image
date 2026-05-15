@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 
 # Assuming correct import path after rename
-from image_alpha_utils.gray2alpha import create_alpha_image, parse_color
+from twat_image.gray2alpha import create_alpha_image, parse_color
 
 
 # Helper to create a grayscale image
@@ -16,7 +16,7 @@ def create_gray_image(pixels: list[list[int]]) -> Image.Image:
 
 # Helper to get pixel data from RGBA image
 def get_rgba_pixel_data(img: Image.Image) -> list[list[tuple[int, int, int, int]]]:
-    return np.array(img.convert("RGBA")).tolist()
+    return [[tuple(pixel) for pixel in row] for row in np.array(img.convert("RGBA")).tolist()]
 
 
 def test_create_alpha_simple_black_color_default_inversion():
@@ -93,9 +93,7 @@ def test_create_alpha_solid_mask_default_inversion():
     """Test with a solid white mask (should become fully transparent after inversion)."""
     mask_pixels = [[255, 255], [255, 255]]  # All white
     mask_img = create_gray_image(mask_pixels)
-    color_rgb = parse_color(
-        "green"
-    )  # (0,128,0) or (0,255,0) depending on webcolors vs PIL
+    color_rgb = parse_color("green")  # (0,128,0) or (0,255,0) depending on webcolors vs PIL
     # webcolors.name_to_rgb('green') is (0, 128, 0)
     # PIL.ImageColor.getrgb('green') is (0, 128, 0)
     # Oh, CSS 'green' is #008000. 'lime' is #00FF00.

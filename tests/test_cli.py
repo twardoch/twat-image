@@ -7,8 +7,8 @@ from unittest import mock
 from PIL import Image
 
 # Target import path
-from image_alpha_utils.gray2alpha import cli as gray2alpha_cli
-from image_alpha_utils.gray2alpha import igray2alpha  # For verifying calls
+from twat_image.gray2alpha import cli as gray2alpha_cli
+from twat_image.gray2alpha import igray2alpha  # For verifying calls
 
 
 # Helper to create a dummy image object
@@ -16,14 +16,12 @@ def create_dummy_pil_image(mode="RGB", size=(10, 10), color="red") -> Image.Imag
     return Image.new(mode, size, color)
 
 
-@mock.patch("image_alpha_utils.gray2alpha.save_image")
-@mock.patch("image_alpha_utils.gray2alpha.open_image")
+@mock.patch("twat_image.gray2alpha.save_image")
+@mock.patch("twat_image.gray2alpha.open_image")
 def test_cli_simple_file_io(mock_open_image, mock_save_image):
     """Test basic CLI operation with input and output files."""
     dummy_input_img = create_dummy_pil_image()
-    mock_open_image.return_value.__enter__.return_value = (
-        dummy_input_img  # Mock context manager
-    )
+    mock_open_image.return_value.__enter__.return_value = dummy_input_img  # Mock context manager
 
     # Expected processed image (mocked, not actually processed by igray2alpha here for simplicity of CLI test)
     # We're testing the CLI plumbing, not igray2alpha's logic itself (that's in other tests)
@@ -61,16 +59,12 @@ def test_cli_simple_file_io(mock_open_image, mock_save_image):
     # For now, confirming it's an image and was passed to save_image is good for CLI plumbing.
 
 
-@mock.patch("image_alpha_utils.gray2alpha.igray2alpha")  # Mock the core processing
-@mock.patch("image_alpha_utils.gray2alpha.save_image")
-@mock.patch("image_alpha_utils.gray2alpha.open_image")
-def test_cli_parameters_passed_to_igray2alpha(
-    mock_open_image, mock_save_image, mock_igray2alpha_func
-):
+@mock.patch("twat_image.gray2alpha.igray2alpha")  # Mock the core processing
+@mock.patch("twat_image.gray2alpha.save_image")
+@mock.patch("twat_image.gray2alpha.open_image")
+def test_cli_parameters_passed_to_igray2alpha(mock_open_image, mock_save_image, mock_igray2alpha_func):
     """Test that CLI parameters are correctly passed to the igray2alpha function."""
-    dummy_input_img = create_dummy_pil_image(
-        mode="L"
-    )  # Input for igray2alpha is PIL Image
+    dummy_input_img = create_dummy_pil_image(mode="L")  # Input for igray2alpha is PIL Image
     mock_open_image.return_value.__enter__.return_value = dummy_input_img
 
     # The mock_igray2alpha_func will return another dummy image to be passed to save_image
@@ -115,7 +109,7 @@ def test_cli_parameters_passed_to_igray2alpha(
 
 
 @mock.patch("sys.stderr", new_callable=io.StringIO)
-@mock.patch("image_alpha_utils.gray2alpha.open_image")
+@mock.patch("twat_image.gray2alpha.open_image")
 def test_cli_input_file_not_found(mock_open_image, mock_stderr):
     """Test CLI behavior when input file is not found."""
     mock_open_image.side_effect = FileNotFoundError("File not found: input.jpg")
@@ -139,7 +133,7 @@ def test_cli_input_file_not_found(mock_open_image, mock_stderr):
 
 
 @mock.patch("sys.stdout", new_callable=io.BytesIO)  # For binary image data
-@mock.patch("image_alpha_utils.gray2alpha.open_image")
+@mock.patch("twat_image.gray2alpha.open_image")
 def test_cli_stdout_output(mock_open_image, mock_stdout_bytes):
     """Test CLI writing to stdout when output_path is '-'."""
     dummy_input_img = create_dummy_pil_image(color="green")
@@ -170,19 +164,18 @@ def test_cli_stdout_output(mock_open_image, mock_stdout_bytes):
     assert list(img_from_stdout.getdata()) == list(expected_output_img.getdata())
 
 
-@mock.patch("image_alpha_utils.gray2alpha.save_image")  # To prevent actual file saving
-@mock.patch("sys.stdin.buffer", new_callable=io.BytesIO)
-def test_cli_stdin_input(mock_stdin_bytes, mock_save_image):
+@mock.patch("twat_image.gray2alpha.save_image")  # To prevent actual file saving
+def test_cli_stdin_input(mock_save_image):
     """Test CLI reading from stdin when input_path is '-'."""
     dummy_input_img_content = io.BytesIO()
     create_dummy_pil_image(color="yellow").save(dummy_input_img_content, format="PNG")
-    mock_stdin_bytes.write(dummy_input_img_content.getvalue())
-    mock_stdin_bytes.seek(0)
+    mock_stdin = mock.Mock()
+    mock_stdin.buffer = io.BytesIO(dummy_input_img_content.getvalue())
 
     output_file = "output_from_stdin.png"
     test_args = ["gray2alpha", "-", output_file]  # Input from stdin
 
-    with mock.patch.object(sys, "argv", test_args):
+    with mock.patch.object(sys, "argv", test_args), mock.patch.object(sys, "stdin", mock_stdin):
         try:
             gray2alpha_cli()
         except SystemExit as e:
@@ -212,7 +205,7 @@ def test_cli_invalid_color_parameter(mock_stderr):
     # No need to mock open/save as Fire should catch error before that.
     # However, open_image is called before igray2alpha (where parse_color is).
     # So we need to mock open_image to prevent FileNotFoundError.
-    with mock.patch("image_alpha_utils.gray2alpha.open_image") as mock_open:
+    with mock.patch("twat_image.gray2alpha.open_image") as mock_open:
         mock_open.return_value.__enter__.return_value = create_dummy_pil_image()
 
         test_args = [
@@ -236,7 +229,7 @@ def test_cli_invalid_color_parameter(mock_stderr):
 
 
 # This test file assumes that the CLI entry point is correctly set up
-# in pyproject.toml to call image_alpha_utils.gray2alpha:cli
+# in pyproject.toml to call twat_image.gray2alpha:cli
 # For now, we are directly testing the cli() function.
 # If using `subprocess` to test the installed script, that would be an integration test.
 # These tests are more like unit/functional tests for the CLI logic.

@@ -4,7 +4,7 @@ import numpy as np
 from PIL import Image
 
 # Assuming correct import path after rename
-from image_alpha_utils.gray2alpha import igray2alpha, parse_color
+from twat_image.gray2alpha import igray2alpha, parse_color
 
 
 # Helper to create an RGB image (as igray2alpha converts to 'L' internally)
@@ -21,7 +21,7 @@ def create_gray_image(pixels: list[list[int]]) -> Image.Image:
 
 # Helper to get pixel data from RGBA image
 def get_rgba_pixel_data(img: Image.Image) -> list[list[tuple[int, int, int, int]]]:
-    return np.array(img.convert("RGBA")).tolist()
+    return [[tuple(pixel) for pixel in row] for row in np.array(img.convert("RGBA")).tolist()]
 
 
 def test_igray2alpha_simple_case_defaults():
@@ -162,9 +162,7 @@ def test_igray2alpha_percentage_thresholds():
         ]
     ]
 
-    result_img = igray2alpha(
-        input_img, color="black", white_point=10, black_point=10, negative=False
-    )
+    result_img = igray2alpha(input_img, color="black", white_point=10, black_point=10, negative=False)
     assert get_rgba_pixel_data(result_img) == expected_rgba_pixels
 
 

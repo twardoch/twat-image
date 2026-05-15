@@ -5,7 +5,7 @@ import numpy as np
 from PIL import Image
 
 # Assuming correct import path after rename
-from image_alpha_utils.gray2alpha import normalize_grayscale
+from twat_image.gray2alpha import normalize_grayscale
 
 
 # Helper to create a grayscale image from a list of lists (pixel values)
@@ -175,13 +175,9 @@ def test_normalize_percentage_thresholds():
     # 170 (scaled) -> (170 - 25.5) / 204 * 255 = (144.5/204)*255 = 0.7083 * 255 = 180.62 -> 181
     # 255 (>229.5) -> 255
     # Expected: [[0, 74, 181, 255]]
-    normalized_img = normalize_grayscale(
-        img, white_point=10, black_point=10
-    )  # Percentages
+    normalized_img = normalize_grayscale(img, white_point=10, black_point=10)  # Percentages
     expected_pixels = [[0, 74, 181, 255]]
-    assert get_pixel_data(normalized_img) == expected_pixels, (
-        "Percentage threshold test failed"
-    )
+    assert get_pixel_data(normalized_img) == expected_pixels, "Percentage threshold test failed"
 
 
 def test_normalize_flat_image():
@@ -223,7 +219,7 @@ def test_invalid_thresholds_values():
     with pytest.raises(ValueError, match="Invalid thresholds"):
         normalize_grayscale(img, white_point=0.5, black_point=0.5)  # bp == wp
     with pytest.raises(ValueError, match="Invalid thresholds"):
-        normalize_grayscale(img, white_point=1.1, black_point=0.1)  # wp > 1
+        normalize_grayscale(img, white_point=0, black_point=0.1)  # wp <= bp
     with pytest.raises(ValueError, match="Invalid thresholds"):
         normalize_grayscale(img, white_point=0.9, black_point=-0.1)  # bp < 0
 

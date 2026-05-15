@@ -15,7 +15,7 @@ build-backend = "hatchling.build" # Use Hatchling as the build backend
 # Wheel build configuration
 # Specifies which packages to include in the wheel distribution
 [tool.hatch.build.targets.wheel]
-packages = ["src/image_alpha_utils"]
+packages = ["src/twat_image", "src/image_alpha_utils"]
 
 # Project Metadata Configuration
 # ------------------------------
@@ -41,10 +41,13 @@ classifiers = [
 # -------------------
 # External packages required for the project to function
 dependencies = [
+<<<<<<< Updated upstream
+=======
+    "twat>=1.8.1",
+>>>>>>> Stashed changes
     "fire",
     "numpy",
     "pillow",
-    "webcolors",
 ]
 
 # Project Authors
@@ -64,13 +67,19 @@ Source = "https://github.com/twardoch/image-alpha-utils"
 # Plugin Registration (Example - adjust if needed)
 # -----------------------
 # Registers this package as a plugin for a hypothetical host ecosystem
+<<<<<<< Updated upstream
 # [project.entry-points."image_utils_plugin_host.plugins"]
 # image_alpha = "image_alpha_utils.gray2alpha:igray2alpha" # Example entry point
+=======
+[project.entry-points."twat.plugins"]
+image = "twat_image"
+>>>>>>> Stashed changes
 
 # Command-line scripts
 # --------------------
 [project.scripts]
-imagealpha = "image_alpha_utils.gray2alpha:cli"
+twat-image = "twat_image:main"
+imagealpha = "twat_image.gray2alpha:cli"
 
 # Version configuration using VCS (Git)
 [tool.hatch.version]
@@ -96,12 +105,18 @@ dependencies = [
 # Scripts available in the default environment
 [tool.hatch.envs.default.scripts]
 test = "pytest {args:tests}"
+<<<<<<< Updated upstream
 test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/image_alpha_utils --cov=tests {args:tests}"
 type-check = "mypy src/image_alpha_utils tests"
 lint = ["ruff check src/image_alpha_utils tests", "ruff format src/image_alpha_utils tests"]
 build = "hatch build"
 clean = "hatch clean"
 version = "hatch version"
+=======
+test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/twat_image --cov=tests {args:tests}"
+type-check = "mypy src/twat_image tests"
+lint = ["ruff check src/twat_image tests", "ruff format src/twat_image tests"]
+>>>>>>> Stashed changes
 
 # Python version matrix for testing
 [[tool.hatch.envs.all.matrix]]
@@ -117,7 +132,6 @@ dependencies = [
     "fire",
     "numpy",
     "pillow",
-    "webcolors",
     "types-Pillow",
     # pytest is needed for test file analysis by mypy if not already pulled in
     "pytest>=8.3.4",
@@ -125,7 +139,7 @@ dependencies = [
 
 # Linting environment scripts
 [tool.hatch.envs.lint.scripts]
-typing = "mypy --install-types --non-interactive {args:src/image_alpha_utils tests}"
+typing = "mypy --install-types --non-interactive {args:src/twat_image tests}"
 style = ["ruff check {args:.}", "ruff format {args:.}"]
 fmt = ["ruff format {args:.}", "ruff check --fix {args:.}"]
 all = ["style", "typing"]
@@ -218,14 +232,14 @@ ignore_missing_imports = true
 
 # Coverage.py configuration for test coverage
 [tool.coverage.run]
-source_pkgs = ["image_alpha_utils", "tests"]
+source_pkgs = ["twat_image", "tests"]
 branch = true
 parallel = true
 # omit = ["src/image_alpha_utils/__about__.py"] # No __about__.py file exists
 
 # Coverage path mappings
 [tool.coverage.paths]
-image_alpha_utils = ["src/image_alpha_utils", "*/image-alpha-utils/src/image_alpha_utils"]
+twat_image = ["src/twat_image", "*/twat-image/src/twat_image"]
 tests = ["tests", "*/image-alpha-utils/tests"]
 
 # Coverage report configuration
@@ -254,10 +268,13 @@ docs = [
     "mkdocstrings[python]>=0.27.0",
 ]
 all = [
+<<<<<<< Updated upstream
+=======
+    "twat>=1.8.1",
+>>>>>>> Stashed changes
     "fire",
     "numpy",
     "pillow",
-    "webcolors",
 ]
 
 # Test environment configuration
@@ -267,7 +284,7 @@ dependencies = [".[test]"]
 # Test environment scripts
 [tool.hatch.envs.test.scripts]
 test = "python -m pytest -n auto {args:tests}"
-test-cov = "python -m pytest -n auto --cov-report=term-missing --cov-config=pyproject.toml --cov=src/image_alpha_utils --cov=tests {args:tests}"
+test-cov = "python -m pytest -n auto --cov-report=term-missing --cov-config=pyproject.toml --cov=src/twat_image --cov=tests {args:tests}"
 bench = "python -m pytest -v -p no:briefcase tests/test_benchmark.py --benchmark-only"
 bench-save = "python -m pytest -v -p no:briefcase tests/test_benchmark.py --benchmark-only --benchmark-json=benchmark/results.json"
 

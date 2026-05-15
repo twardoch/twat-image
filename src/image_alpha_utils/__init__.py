@@ -1,13 +1,12 @@
-"""Image Alpha Utilities: Convert images to include alpha channels."""
+"""Deprecated: Use twat_image instead."""
 
-from importlib import metadata
+import warnings
 
-from image_alpha_utils.gray2alpha import ColorSpec, igray2alpha
+warnings.warn(
+    "image_alpha_utils is deprecated. Use twat_image instead.",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
-__version__ = metadata.version(__name__)
-
-__all__ = [
-    "ColorSpec",
-    "__version__",
-    "igray2alpha",
-]
+from twat_image import *  # noqa: F403
+from twat_image.gray2alpha import *  # noqa: F403
