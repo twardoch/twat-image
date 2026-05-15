@@ -63,13 +63,8 @@ Source = "https://github.com/twardoch/image-alpha-utils"
 # Plugin Registration (Example - adjust if needed)
 # -----------------------
 # Registers this package as a plugin for a hypothetical host ecosystem
-<<<<<<< Updated upstream
-# [project.entry-points."image_utils_plugin_host.plugins"]
-# image_alpha = "image_alpha_utils.gray2alpha:igray2alpha" # Example entry point
-=======
 [project.entry-points."twat.plugins"]
 image = "twat_image"
->>>>>>> Stashed changes
 
 # Command-line scripts
 # --------------------
@@ -101,18 +96,9 @@ dependencies = [
 # Scripts available in the default environment
 [tool.hatch.envs.default.scripts]
 test = "pytest {args:tests}"
-<<<<<<< Updated upstream
-test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/image_alpha_utils --cov=tests {args:tests}"
-type-check = "mypy src/image_alpha_utils tests"
-lint = ["ruff check src/image_alpha_utils tests", "ruff format src/image_alpha_utils tests"]
-build = "hatch build"
-clean = "hatch clean"
-version = "hatch version"
-=======
 test-cov = "pytest --cov-report=term-missing --cov-config=pyproject.toml --cov=src/twat_image --cov=tests {args:tests}"
 type-check = "mypy src/twat_image tests"
 lint = ["ruff check src/twat_image tests", "ruff format src/twat_image tests"]
->>>>>>> Stashed changes
 
 # Python version matrix for testing
 [[tool.hatch.envs.all.matrix]]
@@ -264,10 +250,7 @@ docs = [
     "mkdocstrings[python]>=0.27.0",
 ]
 all = [
-<<<<<<< Updated upstream
-=======
     "twat>=1.8.1",
->>>>>>> Stashed changes
     "fire",
     "numpy",
     "pillow",
