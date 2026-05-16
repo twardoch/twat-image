@@ -4,7 +4,7 @@ import pytest
 from PIL import Image
 import numpy as np
 
-from image_alpha_utils.gray2alpha import igray2alpha, normalize_grayscale, create_alpha_image
+from twat_image.gray2alpha import igray2alpha, normalize_grayscale, create_alpha_image
 
 
 @pytest.fixture
@@ -85,14 +85,7 @@ def test_create_alpha_image_benchmark(benchmark, random_test_image):
 @pytest.mark.benchmark
 def test_igray2alpha_with_custom_params(benchmark, random_test_image):
     """Benchmark igray2alpha with custom parameters."""
-    result = benchmark(
-        igray2alpha,
-        random_test_image,
-        color="blue",
-        white_point=0.8,
-        black_point=0.2,
-        negative=True
-    )
+    result = benchmark(igray2alpha, random_test_image, color="blue", white_point=0.8, black_point=0.2, negative=True)
     assert result.mode == "RGBA"
     assert result.size == random_test_image.size
 
@@ -104,7 +97,7 @@ def test_igray2alpha_percentage_thresholds(benchmark, random_test_image):
         igray2alpha,
         random_test_image,
         white_point=15,  # 15% percentage
-        black_point=15   # 15% percentage
+        black_point=15,  # 15% percentage
     )
     assert result.mode == "RGBA"
     assert result.size == random_test_image.size

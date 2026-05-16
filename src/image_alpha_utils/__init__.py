@@ -8,5 +8,5 @@ warnings.warn(
     stacklevel=2,
 )
 
-from twat_image import *  # noqa: F403
-from twat_image.gray2alpha import *  # noqa: F403
+from twat_image import *  # noqa: E402, F403
+from twat_image.gray2alpha import *  # noqa: E402, F403

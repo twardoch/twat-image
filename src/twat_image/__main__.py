@@ -1,93 +1,177 @@
-"""Command-line interface for twat-image."""
 # this_file: src/twat_image/__main__.py
+"""Fire CLI entry point for twat-image."""
 
 from __future__ import annotations
 
-import argparse
 from pathlib import Path
 
+import fire
 from PIL import Image
 
+from twat_image.__version__ import __version__
 from twat_image.gray2alpha import gray2alpha
-from twat_image.operations import convert_image, crop_image, normalize_image, outcrop_image, read_image_metadata, scale_image
+from twat_image.operations import (
+    convert_image,
+    crop_image,
+    normalize_image,
+    outcrop_image,
+    read_image_metadata,
+    scale_image,
+)
 
 
-def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="twat-image", description="Deterministic image utilities and AI image adapters.")
-    sub = parser.add_subparsers(dest="command", required=False)
+def _version() -> str:
+    """Print the installed version of twat-image."""
+    return __version__
 
-    gray = sub.add_parser("gray2alpha", help="Create a grayscale-derived alpha PNG.")
-    gray.add_argument("input_path")
-    gray.add_argument("output_path")
-    gray.add_argument("--color", default="black")
-    gray.add_argument("--white-point", type=float, default=0.9)
-    gray.add_argument("--black-point", type=float, default=0.1)
-    gray.add_argument("--negative", action="store_true")
 
-    meta = sub.add_parser("metadata", help="Print image metadata and duplicate fingerprint.")
-    meta.add_argument("input_path")
+def _info(path: str) -> dict:
+    """Print metadata and perceptual fingerprint for an image file."""
+    meta = read_image_metadata(Path(path))
+    return {
+        "path": str(meta.path),
+        "width": meta.width,
+        "height": meta.height,
+        "mode": meta.mode,
+        "format": meta.format,
+        "fingerprint": meta.fingerprint,
+    }
 
-    scale = sub.add_parser("scale", help="Resize an image.")
-    scale.add_argument("input_path")
-    scale.add_argument("output_path")
-    scale.add_argument("--width", type=int)
-    scale.add_argument("--height", type=int)
-    scale.add_argument("--factor", type=float)
 
-    crop = sub.add_parser("crop", help="Crop an image.")
-    crop.add_argument("input_path")
-    crop.add_argument("output_path")
-    crop.add_argument("left", type=int)
-    crop.add_argument("top", type=int)
-    crop.add_argument("right", type=int)
-    crop.add_argument("bottom", type=int)
+def _scale(
+    input_path: str,
+    output_path: str,
+    *,
+    width: int | None = None,
+    height: int | None = None,
+    factor: float | None = None,
+) -> None:
+    """Resize an image by explicit dimensions or by a scale factor."""
+    with Image.open(Path(input_path)) as im:
+        scale_image(im, width=width, height=height, factor=factor).save(output_path)
 
-    outcrop = sub.add_parser("outcrop", help="Expand an image canvas.")
-    outcrop.add_argument("input_path")
-    outcrop.add_argument("output_path")
-    outcrop.add_argument("--left", type=int, default=0)
-    outcrop.add_argument("--top", type=int, default=0)
-    outcrop.add_argument("--right", type=int, default=0)
-    outcrop.add_argument("--bottom", type=int, default=0)
 
-    norm = sub.add_parser("normalize", help="Auto-contrast an image.")
-    norm.add_argument("input_path")
-    norm.add_argument("output_path")
-    norm.add_argument("--equalize", action="store_true")
+def _crop(
+    input_path: str,
+    output_path: str,
+    left: int,
+    top: int,
+    right: int,
+    bottom: int,
+) -> None:
+    """Crop an image using Pillow box coordinates (left, top, right, bottom)."""
+    with Image.open(Path(input_path)) as im:
+        crop_image(im, left, top, right, bottom).save(output_path)
 
-    conv = sub.add_parser("convert", help="Convert image format.")
-    conv.add_argument("input_path")
-    conv.add_argument("output_path")
-    conv.add_argument("--format")
-    return parser
+
+def _outcrop(
+    input_path: str,
+    output_path: str,
+    *,
+    left: int = 0,
+    top: int = 0,
+    right: int = 0,
+    bottom: int = 0,
+) -> None:
+    """Expand the canvas around an image with transparent or filled margins."""
+    with Image.open(Path(input_path)) as im:
+        outcrop_image(im, left=left, top=top, right=right, bottom=bottom).save(output_path)
+
+
+def _normalize(input_path: str, output_path: str, *, equalize: bool = False) -> None:
+    """Auto-contrast (and optionally equalize) an image."""
+    with Image.open(Path(input_path)) as im:
+        normalize_image(im, equalize=equalize).save(output_path)
+
+
+def _convert(input_path: str, output_path: str, *, fmt: str | None = None) -> None:
+    """Convert an image file to another format."""
+    convert_image(Path(input_path), Path(output_path), fmt=fmt)
+
+
+# Genai functions use lazy imports — twat_genai is an optional dependency.
+def _genai_generate(prompt: str, *, output_dir: str = "generated_images") -> None:
+    """Generate an image via the configured twat_genai backend."""
+    from twat_image.genai import generate_image  # noqa: PLC0415
+
+    generate_image(prompt, output_dir=output_dir)
+
+
+def _genai_edit(prompt: str, input_image: str, *, output_dir: str = "generated_images") -> None:
+    """Edit an existing image via twat_genai image-to-image support."""
+    from twat_image.genai import edit_image  # noqa: PLC0415
+
+    edit_image(prompt, input_image, output_dir=output_dir)
+
+
+GENAI_COMMANDS: dict[str, object] = {
+    "generate": _genai_generate,
+    "edit": _genai_edit,
+}
+
+# Explicit allow-list; never fire.Fire(module).
+COMMANDS: dict[str, object] = {
+    "version": _version,
+    "gray2alpha": gray2alpha,
+    "info": _info,
+    "scale": _scale,
+    "crop": _crop,
+    "outcrop": _outcrop,
+    "normalize": _normalize,
+    "convert": _convert,
+    "genai": GENAI_COMMANDS,
+}
 
 
 def main() -> None:
     """Run the twat-image CLI."""
-    parser = _build_parser()
-    args = parser.parse_args()
-    if args.command is None:
-        parser.print_help()
-        return
-    if args.command == "gray2alpha":
-        gray2alpha(args.input_path, args.output_path, args.color, args.white_point, args.black_point, negative=args.negative)
-    elif args.command == "metadata":
-        data = read_image_metadata(args.input_path)
-        print(f"{data.path}	{data.width}x{data.height}	{data.mode}	{data.format}	{data.fingerprint}")
-    elif args.command == "scale":
-        with Image.open(args.input_path) as im:
-            scale_image(im, width=args.width, height=args.height, factor=args.factor).save(args.output_path)
-    elif args.command == "crop":
-        with Image.open(args.input_path) as im:
-            crop_image(im, args.left, args.top, args.right, args.bottom).save(args.output_path)
-    elif args.command == "outcrop":
-        with Image.open(args.input_path) as im:
-            outcrop_image(im, left=args.left, top=args.top, right=args.right, bottom=args.bottom).save(args.output_path)
-    elif args.command == "normalize":
-        with Image.open(args.input_path) as im:
-            normalize_image(im, equalize=args.equalize).save(args.output_path)
-    elif args.command == "convert":
-        convert_image(Path(args.input_path), Path(args.output_path), fmt=args.format)
+    fire.Fire(COMMANDS, name="twat-image")
+
+
+# Dashed-entry helpers — one per leaf and per group.
+def cmd_version() -> None:
+    """Entry point for twat-image-version."""
+    fire.Fire(_version, name="twat-image-version")
+
+
+def cmd_gray2alpha() -> None:
+    """Entry point for twat-image-gray2alpha."""
+    fire.Fire(gray2alpha, name="twat-image-gray2alpha")
+
+
+def cmd_info() -> None:
+    """Entry point for twat-image-info."""
+    fire.Fire(_info, name="twat-image-info")
+
+
+def cmd_scale() -> None:
+    """Entry point for twat-image-scale."""
+    fire.Fire(_scale, name="twat-image-scale")
+
+
+def cmd_crop() -> None:
+    """Entry point for twat-image-crop."""
+    fire.Fire(_crop, name="twat-image-crop")
+
+
+def cmd_outcrop() -> None:
+    """Entry point for twat-image-outcrop."""
+    fire.Fire(_outcrop, name="twat-image-outcrop")
+
+
+def cmd_normalize() -> None:
+    """Entry point for twat-image-normalize."""
+    fire.Fire(_normalize, name="twat-image-normalize")
+
+
+def cmd_convert() -> None:
+    """Entry point for twat-image-convert."""
+    fire.Fire(_convert, name="twat-image-convert")
+
+
+def cmd_genai() -> None:
+    """Entry point for twat-image-genai."""
+    fire.Fire(GENAI_COMMANDS, name="twat-image-genai")
 
 
 if __name__ == "__main__":

@@ -24,7 +24,9 @@ class ImageMetadata:
     fingerprint: str
 
 
-def alpha_from_diff(base: Image.Image, changed: Image.Image, *, color: str | tuple[int, int, int] = "black") -> Image.Image:
+def alpha_from_diff(
+    base: Image.Image, changed: Image.Image, *, color: str | tuple[int, int, int] = "black"
+) -> Image.Image:
     """Create an RGBA image whose alpha is the grayscale difference of two images."""
     if base.size != changed.size:
         changed = changed.resize(base.size, ResamplingFilter)
@@ -45,7 +47,9 @@ def normalize_image(image: Image.Image, *, autocontrast: bool = True, equalize: 
     return result
 
 
-def scale_image(image: Image.Image, *, width: int | None = None, height: int | None = None, factor: float | None = None) -> Image.Image:
+def scale_image(
+    image: Image.Image, *, width: int | None = None, height: int | None = None, factor: float | None = None
+) -> Image.Image:
     """Resize an image by explicit dimensions or by a scale factor."""
     if factor is not None:
         if factor <= 0:

@@ -24,7 +24,9 @@ def generate_image(prompt: str, *, output_dir: str | Path = "generated_images", 
     return asyncio.run(cli._run_generation(prompt, genai.ModelTypes.TEXT))
 
 
-def edit_image(prompt: str, input_image: str | Path, *, output_dir: str | Path = "generated_images", **kwargs: Any) -> Any:
+def edit_image(
+    prompt: str, input_image: str | Path, *, output_dir: str | Path = "generated_images", **kwargs: Any
+) -> Any:
     """Edit an image through twat_genai image-to-image support."""
     genai = _load_genai()
     cli = genai.TwatGenAiCLI(output_dir=output_dir, **kwargs)

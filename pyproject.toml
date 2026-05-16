@@ -69,8 +69,17 @@ image = "twat_image"
 # Command-line scripts
 # --------------------
 [project.scripts]
-twat-image = "twat_image:main"
-imagealpha = "twat_image.gray2alpha:cli"
+twat-image            = "twat_image.__main__:main"
+twat-image-version    = "twat_image.__main__:cmd_version"
+twat-image-info       = "twat_image.__main__:cmd_info"
+twat-image-gray2alpha = "twat_image.__main__:cmd_gray2alpha"
+twat-image-convert    = "twat_image.__main__:cmd_convert"
+twat-image-scale      = "twat_image.__main__:cmd_scale"
+twat-image-crop       = "twat_image.__main__:cmd_crop"
+twat-image-outcrop    = "twat_image.__main__:cmd_outcrop"
+twat-image-normalize  = "twat_image.__main__:cmd_normalize"
+twat-image-genai      = "twat_image.__main__:cmd_genai"
+imagealpha            = "twat_image.gray2alpha:cli"
 
 # Version configuration using VCS (Git)
 [tool.hatch.version]

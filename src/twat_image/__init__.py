@@ -1,7 +1,7 @@
 """twat-image: deterministic image utilities with optional AI backends."""
 # this_file: src/twat_image/__init__.py
 
-from .__version__ import __version__  # noqa: F401
+from .__version__ import __version__
 from twat_image.__main__ import main as cli_main
 
 from twat_image.genai import edit_image, generate_image
