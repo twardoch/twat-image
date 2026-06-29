@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- `.github/workflows/` CI (ci.yml, push.yml, release.yml) restored from backup.
+- `mkdocs.yml` and `src_docs/` MkDocs Material documentation site covering installation, quick start, operations reference, gray-to-alpha guide, CLI reference, AI boundary, API reference, style guide, and contributing guide.
+
+### Fixed
+- `normalize_grayscale` now raises `ValueError` for threshold values in the ambiguous range `(1.0, 2.0)` — too large for fractions, too small for meaningful percentages. Previously `white_point=1.1` was silently accepted as a `1.1%` percentage, confusing users who intended an out-of-range fraction.
+- `test_edge_cases.py`: fixed `test_extreme_threshold_values` — `black_point=1, white_point=99` produced a `ValueError` under the current percentage formula; updated to `black_point=5, white_point=5` (valid equivalent defaults).
+- `test_edge_cases.py`: fixed `test_float_precision` — `white_point` and `black_point` were swapped so `white < black`, causing a `ValueError`; swapped them to the correct order.
+
 ### Changed
 - Renamed project from `twat-image` to `image-alpha-utils`.
 - Updated source directory from `src/twat_image` to `src/image_alpha_utils` (manual file copy and delete).

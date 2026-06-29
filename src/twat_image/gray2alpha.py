@@ -133,6 +133,23 @@ def normalize_grayscale(img: Image.Image, white_point: float = 0.9, black_point:
     Raises:
       ValueError: If threshold values are invalid (e.g., black_point >= white_point).
     """
+    # Reject values in (1.0, 2.0): too large to be valid fractions, too small to
+    # be meaningful percentages.  Users who pass e.g. white_point=1.1 almost
+    # certainly made an error — they either meant the fraction 0.11 or the
+    # percentage 110 (which would be clipped anyway).
+    if 1.0 < white_point < 2.0:
+        msg = (
+            f"white_point={white_point!r} is ambiguous: values in (1, 2) are neither"
+            " valid fractions [0, 1] nor meaningful percentages [2, 100]."
+        )
+        raise ValueError(msg)
+    if 1.0 < black_point < 2.0:
+        msg = (
+            f"black_point={black_point!r} is ambiguous: values in (1, 2) are neither"
+            " valid fractions [0, 1] nor meaningful percentages [2, 100]."
+        )
+        raise ValueError(msg)
+
     # Convert percentages to decimals if needed.
     white_point = (1 - white_point / 100) if white_point > 1 else white_point
     black_point = black_point / 100 if black_point > 1 else black_point

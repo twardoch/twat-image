@@ -1,6 +1,13 @@
 # twat-image
 
+[![CI](https://github.com/twardoch/twat-image/actions/workflows/ci.yml/badge.svg)](https://github.com/twardoch/twat-image/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/twat-image)](https://pypi.org/project/twat-image/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 `twat-image` is the image domain package for the `twat` plugin ecosystem. It owns deterministic image operations and delegates AI generation or editing to `twat_genai` when that optional package is installed.
+
+**[Documentation](https://github.com/twardoch/twat-image#readme)** · [Changelog](CHANGELOG.md) · [Issues](https://github.com/twardoch/twat-image/issues)
 
 ## Install
 

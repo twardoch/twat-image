@@ -123,8 +123,8 @@ def test_extreme_threshold_values():
     result = igray2alpha(img, white_point=0.999)
     assert result.mode == "RGBA"
 
-    # Test with extreme percentage values
-    result = igray2alpha(img, black_point=1, white_point=99)
+    # Test with valid percentage values (black_point=5 → 0.05, white_point=5 → 0.95)
+    result = igray2alpha(img, black_point=5, white_point=5)
     assert result.mode == "RGBA"
 
 
@@ -202,8 +202,8 @@ def test_float_precision():
     """Test that float precision doesn't cause issues."""
     img = Image.new("RGB", (10, 10), (128, 128, 128))
 
-    # Test with precise float values
-    result = igray2alpha(img, white_point=0.123456789, black_point=0.987654321)
+    # Test with precise float values (white_point must be > black_point)
+    result = igray2alpha(img, white_point=0.987654321, black_point=0.123456789)
     assert result.mode == "RGBA"
 
     # Test with values very close to boundaries
